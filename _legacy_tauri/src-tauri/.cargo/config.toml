@@ -1,0 +1,7 @@
+# Project-scoped cargo mirror: crates.io is unreachable from this network.
+# Replaces the default registry with rsproxy.cn (China mirror); revert by deleting this file.
+[source.crates-io]
+replace-with = "rsproxy-sparse"
+
+[source.rsproxy-sparse]
+registry = "sparse+https://rsproxy.cn/index/"

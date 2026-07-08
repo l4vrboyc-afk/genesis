@@ -1,0 +1,2286 @@
+('C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+ 'Projects\\Genesis\\build\\Genesis\\PYZ-00.pyz',
+ [('__future__',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\__future__.py',
+   'PYMODULE'),
+  ('_aix_support',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\_aix_support.py',
+   'PYMODULE'),
+  ('_bootsubprocess',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\_bootsubprocess.py',
+   'PYMODULE'),
+  ('_compat_pickle',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\_compat_pickle.py',
+   'PYMODULE'),
+  ('_compression',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\_compression.py',
+   'PYMODULE'),
+  ('_distutils_hack',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\_distutils_hack\\__init__.py',
+   'PYMODULE'),
+  ('_distutils_hack.override',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\_distutils_hack\\override.py',
+   'PYMODULE'),
+  ('_osx_support',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\_osx_support.py',
+   'PYMODULE'),
+  ('_py_abc',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\_py_abc.py',
+   'PYMODULE'),
+  ('_pydecimal',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\_pydecimal.py',
+   'PYMODULE'),
+  ('_sitebuiltins',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\_sitebuiltins.py',
+   'PYMODULE'),
+  ('_strptime',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\_strptime.py',
+   'PYMODULE'),
+  ('_threading_local',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\_threading_local.py',
+   'PYMODULE'),
+  ('argparse',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\argparse.py',
+   'PYMODULE'),
+  ('ast',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\ast.py',
+   'PYMODULE'),
+  ('asyncio',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\asyncio\\__init__.py',
+   'PYMODULE'),
+  ('asyncio.base_events',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\asyncio\\base_events.py',
+   'PYMODULE'),
+  ('asyncio.base_futures',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\asyncio\\base_futures.py',
+   'PYMODULE'),
+  ('asyncio.base_subprocess',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\asyncio\\base_subprocess.py',
+   'PYMODULE'),
+  ('asyncio.base_tasks',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\asyncio\\base_tasks.py',
+   'PYMODULE'),
+  ('asyncio.constants',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\asyncio\\constants.py',
+   'PYMODULE'),
+  ('asyncio.coroutines',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\asyncio\\coroutines.py',
+   'PYMODULE'),
+  ('asyncio.events',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\asyncio\\events.py',
+   'PYMODULE'),
+  ('asyncio.exceptions',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\asyncio\\exceptions.py',
+   'PYMODULE'),
+  ('asyncio.format_helpers',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\asyncio\\format_helpers.py',
+   'PYMODULE'),
+  ('asyncio.futures',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\asyncio\\futures.py',
+   'PYMODULE'),
+  ('asyncio.locks',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\asyncio\\locks.py',
+   'PYMODULE'),
+  ('asyncio.log',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\asyncio\\log.py',
+   'PYMODULE'),
+  ('asyncio.mixins',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\asyncio\\mixins.py',
+   'PYMODULE'),
+  ('asyncio.proactor_events',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\asyncio\\proactor_events.py',
+   'PYMODULE'),
+  ('asyncio.protocols',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\asyncio\\protocols.py',
+   'PYMODULE'),
+  ('asyncio.queues',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\asyncio\\queues.py',
+   'PYMODULE'),
+  ('asyncio.runners',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\asyncio\\runners.py',
+   'PYMODULE'),
+  ('asyncio.selector_events',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\asyncio\\selector_events.py',
+   'PYMODULE'),
+  ('asyncio.sslproto',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\asyncio\\sslproto.py',
+   'PYMODULE'),
+  ('asyncio.staggered',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\asyncio\\staggered.py',
+   'PYMODULE'),
+  ('asyncio.streams',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\asyncio\\streams.py',
+   'PYMODULE'),
+  ('asyncio.subprocess',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\asyncio\\subprocess.py',
+   'PYMODULE'),
+  ('asyncio.taskgroups',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\asyncio\\taskgroups.py',
+   'PYMODULE'),
+  ('asyncio.tasks',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\asyncio\\tasks.py',
+   'PYMODULE'),
+  ('asyncio.threads',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\asyncio\\threads.py',
+   'PYMODULE'),
+  ('asyncio.timeouts',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\asyncio\\timeouts.py',
+   'PYMODULE'),
+  ('asyncio.transports',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\asyncio\\transports.py',
+   'PYMODULE'),
+  ('asyncio.trsock',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\asyncio\\trsock.py',
+   'PYMODULE'),
+  ('asyncio.unix_events',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\asyncio\\unix_events.py',
+   'PYMODULE'),
+  ('asyncio.windows_events',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\asyncio\\windows_events.py',
+   'PYMODULE'),
+  ('asyncio.windows_utils',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\asyncio\\windows_utils.py',
+   'PYMODULE'),
+  ('base64',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\base64.py',
+   'PYMODULE'),
+  ('bisect',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\bisect.py',
+   'PYMODULE'),
+  ('bottle',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\bottle.py',
+   'PYMODULE'),
+  ('bz2',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\bz2.py',
+   'PYMODULE'),
+  ('calendar',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\calendar.py',
+   'PYMODULE'),
+  ('cffi',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\cffi\\__init__.py',
+   'PYMODULE'),
+  ('cffi._imp_emulation',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\cffi\\_imp_emulation.py',
+   'PYMODULE'),
+  ('cffi._shimmed_dist_utils',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\cffi\\_shimmed_dist_utils.py',
+   'PYMODULE'),
+  ('cffi.api',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\cffi\\api.py',
+   'PYMODULE'),
+  ('cffi.cffi_opcode',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\cffi\\cffi_opcode.py',
+   'PYMODULE'),
+  ('cffi.commontypes',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\cffi\\commontypes.py',
+   'PYMODULE'),
+  ('cffi.cparser',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\cffi\\cparser.py',
+   'PYMODULE'),
+  ('cffi.error',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\cffi\\error.py',
+   'PYMODULE'),
+  ('cffi.ffiplatform',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\cffi\\ffiplatform.py',
+   'PYMODULE'),
+  ('cffi.lock',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\cffi\\lock.py',
+   'PYMODULE'),
+  ('cffi.model',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\cffi\\model.py',
+   'PYMODULE'),
+  ('cffi.pkgconfig',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\cffi\\pkgconfig.py',
+   'PYMODULE'),
+  ('cffi.recompiler',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\cffi\\recompiler.py',
+   'PYMODULE'),
+  ('cffi.vengine_cpy',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\cffi\\vengine_cpy.py',
+   'PYMODULE'),
+  ('cffi.vengine_gen',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\cffi\\vengine_gen.py',
+   'PYMODULE'),
+  ('cffi.verifier',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\cffi\\verifier.py',
+   'PYMODULE'),
+  ('cgi',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\cgi.py',
+   'PYMODULE'),
+  ('clr',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\clr.py',
+   'PYMODULE'),
+  ('clr_loader',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\clr_loader\\__init__.py',
+   'PYMODULE'),
+  ('clr_loader.ffi',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\clr_loader\\ffi\\__init__.py',
+   'PYMODULE'),
+  ('clr_loader.ffi.hostfxr',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\clr_loader\\ffi\\hostfxr.py',
+   'PYMODULE'),
+  ('clr_loader.ffi.mono',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\clr_loader\\ffi\\mono.py',
+   'PYMODULE'),
+  ('clr_loader.ffi.netfx',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\clr_loader\\ffi\\netfx.py',
+   'PYMODULE'),
+  ('clr_loader.hostfxr',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\clr_loader\\hostfxr.py',
+   'PYMODULE'),
+  ('clr_loader.mono',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\clr_loader\\mono.py',
+   'PYMODULE'),
+  ('clr_loader.netfx',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\clr_loader\\netfx.py',
+   'PYMODULE'),
+  ('clr_loader.types',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\clr_loader\\types.py',
+   'PYMODULE'),
+  ('clr_loader.util',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\clr_loader\\util\\__init__.py',
+   'PYMODULE'),
+  ('clr_loader.util.clr_error',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\clr_loader\\util\\clr_error.py',
+   'PYMODULE'),
+  ('clr_loader.util.coreclr_errors',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\clr_loader\\util\\coreclr_errors.py',
+   'PYMODULE'),
+  ('clr_loader.util.find',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\clr_loader\\util\\find.py',
+   'PYMODULE'),
+  ('clr_loader.util.hostfxr_errors',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\clr_loader\\util\\hostfxr_errors.py',
+   'PYMODULE'),
+  ('clr_loader.util.runtime_spec',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\clr_loader\\util\\runtime_spec.py',
+   'PYMODULE'),
+  ('concurrent',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\concurrent\\__init__.py',
+   'PYMODULE'),
+  ('concurrent.futures',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\concurrent\\futures\\__init__.py',
+   'PYMODULE'),
+  ('concurrent.futures._base',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\concurrent\\futures\\_base.py',
+   'PYMODULE'),
+  ('concurrent.futures.process',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\concurrent\\futures\\process.py',
+   'PYMODULE'),
+  ('concurrent.futures.thread',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\concurrent\\futures\\thread.py',
+   'PYMODULE'),
+  ('configparser',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\configparser.py',
+   'PYMODULE'),
+  ('contextlib',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\contextlib.py',
+   'PYMODULE'),
+  ('contextvars',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\contextvars.py',
+   'PYMODULE'),
+  ('copy',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\copy.py',
+   'PYMODULE'),
+  ('csv',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\csv.py',
+   'PYMODULE'),
+  ('ctypes',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\ctypes\\__init__.py',
+   'PYMODULE'),
+  ('ctypes._aix',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\ctypes\\_aix.py',
+   'PYMODULE'),
+  ('ctypes._endian',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\ctypes\\_endian.py',
+   'PYMODULE'),
+  ('ctypes.macholib',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\ctypes\\macholib\\__init__.py',
+   'PYMODULE'),
+  ('ctypes.macholib.dyld',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\ctypes\\macholib\\dyld.py',
+   'PYMODULE'),
+  ('ctypes.macholib.dylib',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\ctypes\\macholib\\dylib.py',
+   'PYMODULE'),
+  ('ctypes.macholib.framework',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\ctypes\\macholib\\framework.py',
+   'PYMODULE'),
+  ('ctypes.util',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\ctypes\\util.py',
+   'PYMODULE'),
+  ('ctypes.wintypes',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\ctypes\\wintypes.py',
+   'PYMODULE'),
+  ('dataclasses',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\dataclasses.py',
+   'PYMODULE'),
+  ('datetime',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\datetime.py',
+   'PYMODULE'),
+  ('decimal',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\decimal.py',
+   'PYMODULE'),
+  ('difflib',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\difflib.py',
+   'PYMODULE'),
+  ('dis',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\dis.py',
+   'PYMODULE'),
+  ('distutils',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\distutils\\__init__.py',
+   'PYMODULE'),
+  ('distutils._msvccompiler',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\distutils\\_msvccompiler.py',
+   'PYMODULE'),
+  ('distutils.archive_util',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\distutils\\archive_util.py',
+   'PYMODULE'),
+  ('distutils.ccompiler',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\distutils\\ccompiler.py',
+   'PYMODULE'),
+  ('distutils.cmd',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\distutils\\cmd.py',
+   'PYMODULE'),
+  ('distutils.command',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\distutils\\command\\__init__.py',
+   'PYMODULE'),
+  ('distutils.command.bdist',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\distutils\\command\\bdist.py',
+   'PYMODULE'),
+  ('distutils.command.build',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\distutils\\command\\build.py',
+   'PYMODULE'),
+  ('distutils.command.build_ext',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\distutils\\command\\build_ext.py',
+   'PYMODULE'),
+  ('distutils.command.sdist',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\distutils\\command\\sdist.py',
+   'PYMODULE'),
+  ('distutils.config',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\distutils\\config.py',
+   'PYMODULE'),
+  ('distutils.core',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\distutils\\core.py',
+   'PYMODULE'),
+  ('distutils.debug',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\distutils\\debug.py',
+   'PYMODULE'),
+  ('distutils.dep_util',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\distutils\\dep_util.py',
+   'PYMODULE'),
+  ('distutils.dir_util',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\distutils\\dir_util.py',
+   'PYMODULE'),
+  ('distutils.dist',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\distutils\\dist.py',
+   'PYMODULE'),
+  ('distutils.errors',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\distutils\\errors.py',
+   'PYMODULE'),
+  ('distutils.extension',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\distutils\\extension.py',
+   'PYMODULE'),
+  ('distutils.fancy_getopt',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\distutils\\fancy_getopt.py',
+   'PYMODULE'),
+  ('distutils.file_util',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\distutils\\file_util.py',
+   'PYMODULE'),
+  ('distutils.filelist',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\distutils\\filelist.py',
+   'PYMODULE'),
+  ('distutils.log',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\distutils\\log.py',
+   'PYMODULE'),
+  ('distutils.msvc9compiler',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\distutils\\msvc9compiler.py',
+   'PYMODULE'),
+  ('distutils.spawn',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\distutils\\spawn.py',
+   'PYMODULE'),
+  ('distutils.sysconfig',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\distutils\\sysconfig.py',
+   'PYMODULE'),
+  ('distutils.text_file',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\distutils\\text_file.py',
+   'PYMODULE'),
+  ('distutils.util',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\distutils\\util.py',
+   'PYMODULE'),
+  ('distutils.version',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\distutils\\version.py',
+   'PYMODULE'),
+  ('distutils.versionpredicate',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\distutils\\versionpredicate.py',
+   'PYMODULE'),
+  ('email',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\email\\__init__.py',
+   'PYMODULE'),
+  ('email._encoded_words',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\email\\_encoded_words.py',
+   'PYMODULE'),
+  ('email._header_value_parser',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\email\\_header_value_parser.py',
+   'PYMODULE'),
+  ('email._parseaddr',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\email\\_parseaddr.py',
+   'PYMODULE'),
+  ('email._policybase',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\email\\_policybase.py',
+   'PYMODULE'),
+  ('email.base64mime',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\email\\base64mime.py',
+   'PYMODULE'),
+  ('email.charset',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\email\\charset.py',
+   'PYMODULE'),
+  ('email.contentmanager',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\email\\contentmanager.py',
+   'PYMODULE'),
+  ('email.encoders',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\email\\encoders.py',
+   'PYMODULE'),
+  ('email.errors',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\email\\errors.py',
+   'PYMODULE'),
+  ('email.feedparser',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\email\\feedparser.py',
+   'PYMODULE'),
+  ('email.generator',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\email\\generator.py',
+   'PYMODULE'),
+  ('email.header',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\email\\header.py',
+   'PYMODULE'),
+  ('email.headerregistry',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\email\\headerregistry.py',
+   'PYMODULE'),
+  ('email.iterators',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\email\\iterators.py',
+   'PYMODULE'),
+  ('email.message',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\email\\message.py',
+   'PYMODULE'),
+  ('email.parser',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\email\\parser.py',
+   'PYMODULE'),
+  ('email.policy',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\email\\policy.py',
+   'PYMODULE'),
+  ('email.quoprimime',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\email\\quoprimime.py',
+   'PYMODULE'),
+  ('email.utils',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\email\\utils.py',
+   'PYMODULE'),
+  ('fnmatch',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\fnmatch.py',
+   'PYMODULE'),
+  ('fractions',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\fractions.py',
+   'PYMODULE'),
+  ('ftplib',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\ftplib.py',
+   'PYMODULE'),
+  ('getopt',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\getopt.py',
+   'PYMODULE'),
+  ('getpass',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\getpass.py',
+   'PYMODULE'),
+  ('gettext',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\gettext.py',
+   'PYMODULE'),
+  ('glob',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\glob.py',
+   'PYMODULE'),
+  ('gzip',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\gzip.py',
+   'PYMODULE'),
+  ('hashlib',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\hashlib.py',
+   'PYMODULE'),
+  ('hmac',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\hmac.py',
+   'PYMODULE'),
+  ('html',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\html\\__init__.py',
+   'PYMODULE'),
+  ('html.entities',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\html\\entities.py',
+   'PYMODULE'),
+  ('http',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\http\\__init__.py',
+   'PYMODULE'),
+  ('http.client',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\http\\client.py',
+   'PYMODULE'),
+  ('http.cookiejar',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\http\\cookiejar.py',
+   'PYMODULE'),
+  ('http.cookies',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\http\\cookies.py',
+   'PYMODULE'),
+  ('http.server',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\http\\server.py',
+   'PYMODULE'),
+  ('imp',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\imp.py',
+   'PYMODULE'),
+  ('importlib',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\importlib\\__init__.py',
+   'PYMODULE'),
+  ('importlib._abc',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\importlib\\_abc.py',
+   'PYMODULE'),
+  ('importlib._bootstrap',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\importlib\\_bootstrap.py',
+   'PYMODULE'),
+  ('importlib._bootstrap_external',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\importlib\\_bootstrap_external.py',
+   'PYMODULE'),
+  ('importlib.abc',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\importlib\\abc.py',
+   'PYMODULE'),
+  ('importlib.machinery',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\importlib\\machinery.py',
+   'PYMODULE'),
+  ('importlib.metadata',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\importlib\\metadata\\__init__.py',
+   'PYMODULE'),
+  ('importlib.metadata._adapters',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\importlib\\metadata\\_adapters.py',
+   'PYMODULE'),
+  ('importlib.metadata._collections',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\importlib\\metadata\\_collections.py',
+   'PYMODULE'),
+  ('importlib.metadata._functools',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\importlib\\metadata\\_functools.py',
+   'PYMODULE'),
+  ('importlib.metadata._itertools',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\importlib\\metadata\\_itertools.py',
+   'PYMODULE'),
+  ('importlib.metadata._meta',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\importlib\\metadata\\_meta.py',
+   'PYMODULE'),
+  ('importlib.metadata._text',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\importlib\\metadata\\_text.py',
+   'PYMODULE'),
+  ('importlib.readers',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\importlib\\readers.py',
+   'PYMODULE'),
+  ('importlib.resources',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\importlib\\resources\\__init__.py',
+   'PYMODULE'),
+  ('importlib.resources._adapters',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\importlib\\resources\\_adapters.py',
+   'PYMODULE'),
+  ('importlib.resources._common',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\importlib\\resources\\_common.py',
+   'PYMODULE'),
+  ('importlib.resources._itertools',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\importlib\\resources\\_itertools.py',
+   'PYMODULE'),
+  ('importlib.resources._legacy',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\importlib\\resources\\_legacy.py',
+   'PYMODULE'),
+  ('importlib.resources.abc',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\importlib\\resources\\abc.py',
+   'PYMODULE'),
+  ('importlib.resources.readers',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\importlib\\resources\\readers.py',
+   'PYMODULE'),
+  ('importlib.util',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\importlib\\util.py',
+   'PYMODULE'),
+  ('inspect',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\inspect.py',
+   'PYMODULE'),
+  ('ipaddress',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\ipaddress.py',
+   'PYMODULE'),
+  ('json',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\json\\__init__.py',
+   'PYMODULE'),
+  ('json.decoder',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\json\\decoder.py',
+   'PYMODULE'),
+  ('json.encoder',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\json\\encoder.py',
+   'PYMODULE'),
+  ('json.scanner',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\json\\scanner.py',
+   'PYMODULE'),
+  ('logging',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\logging\\__init__.py',
+   'PYMODULE'),
+  ('lzma',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\lzma.py',
+   'PYMODULE'),
+  ('mimetypes',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\mimetypes.py',
+   'PYMODULE'),
+  ('multiprocessing',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\multiprocessing\\__init__.py',
+   'PYMODULE'),
+  ('multiprocessing.connection',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\multiprocessing\\connection.py',
+   'PYMODULE'),
+  ('multiprocessing.context',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\multiprocessing\\context.py',
+   'PYMODULE'),
+  ('multiprocessing.dummy',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\multiprocessing\\dummy\\__init__.py',
+   'PYMODULE'),
+  ('multiprocessing.dummy.connection',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\multiprocessing\\dummy\\connection.py',
+   'PYMODULE'),
+  ('multiprocessing.forkserver',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\multiprocessing\\forkserver.py',
+   'PYMODULE'),
+  ('multiprocessing.heap',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\multiprocessing\\heap.py',
+   'PYMODULE'),
+  ('multiprocessing.managers',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\multiprocessing\\managers.py',
+   'PYMODULE'),
+  ('multiprocessing.pool',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\multiprocessing\\pool.py',
+   'PYMODULE'),
+  ('multiprocessing.popen_fork',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\multiprocessing\\popen_fork.py',
+   'PYMODULE'),
+  ('multiprocessing.popen_forkserver',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\multiprocessing\\popen_forkserver.py',
+   'PYMODULE'),
+  ('multiprocessing.popen_spawn_posix',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\multiprocessing\\popen_spawn_posix.py',
+   'PYMODULE'),
+  ('multiprocessing.popen_spawn_win32',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\multiprocessing\\popen_spawn_win32.py',
+   'PYMODULE'),
+  ('multiprocessing.process',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\multiprocessing\\process.py',
+   'PYMODULE'),
+  ('multiprocessing.queues',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\multiprocessing\\queues.py',
+   'PYMODULE'),
+  ('multiprocessing.reduction',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\multiprocessing\\reduction.py',
+   'PYMODULE'),
+  ('multiprocessing.resource_sharer',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\multiprocessing\\resource_sharer.py',
+   'PYMODULE'),
+  ('multiprocessing.resource_tracker',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\multiprocessing\\resource_tracker.py',
+   'PYMODULE'),
+  ('multiprocessing.shared_memory',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\multiprocessing\\shared_memory.py',
+   'PYMODULE'),
+  ('multiprocessing.sharedctypes',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\multiprocessing\\sharedctypes.py',
+   'PYMODULE'),
+  ('multiprocessing.spawn',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\multiprocessing\\spawn.py',
+   'PYMODULE'),
+  ('multiprocessing.synchronize',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\multiprocessing\\synchronize.py',
+   'PYMODULE'),
+  ('multiprocessing.util',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\multiprocessing\\util.py',
+   'PYMODULE'),
+  ('netrc',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\netrc.py',
+   'PYMODULE'),
+  ('nturl2path',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\nturl2path.py',
+   'PYMODULE'),
+  ('numbers',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\numbers.py',
+   'PYMODULE'),
+  ('opcode',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\opcode.py',
+   'PYMODULE'),
+  ('packaging',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\packaging\\__init__.py',
+   'PYMODULE'),
+  ('packaging._elffile',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\packaging\\_elffile.py',
+   'PYMODULE'),
+  ('packaging._manylinux',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\packaging\\_manylinux.py',
+   'PYMODULE'),
+  ('packaging._musllinux',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\packaging\\_musllinux.py',
+   'PYMODULE'),
+  ('packaging._parser',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\packaging\\_parser.py',
+   'PYMODULE'),
+  ('packaging._structures',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\packaging\\_structures.py',
+   'PYMODULE'),
+  ('packaging._tokenizer',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\packaging\\_tokenizer.py',
+   'PYMODULE'),
+  ('packaging.dependency_groups',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\packaging\\dependency_groups.py',
+   'PYMODULE'),
+  ('packaging.direct_url',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\packaging\\direct_url.py',
+   'PYMODULE'),
+  ('packaging.errors',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\packaging\\errors.py',
+   'PYMODULE'),
+  ('packaging.licenses',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\packaging\\licenses\\__init__.py',
+   'PYMODULE'),
+  ('packaging.licenses._spdx',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\packaging\\licenses\\_spdx.py',
+   'PYMODULE'),
+  ('packaging.markers',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\packaging\\markers.py',
+   'PYMODULE'),
+  ('packaging.metadata',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\packaging\\metadata.py',
+   'PYMODULE'),
+  ('packaging.pylock',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\packaging\\pylock.py',
+   'PYMODULE'),
+  ('packaging.requirements',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\packaging\\requirements.py',
+   'PYMODULE'),
+  ('packaging.specifiers',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\packaging\\specifiers.py',
+   'PYMODULE'),
+  ('packaging.tags',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\packaging\\tags.py',
+   'PYMODULE'),
+  ('packaging.utils',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\packaging\\utils.py',
+   'PYMODULE'),
+  ('packaging.version',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\packaging\\version.py',
+   'PYMODULE'),
+  ('pathlib',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\pathlib.py',
+   'PYMODULE'),
+  ('pickle',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\pickle.py',
+   'PYMODULE'),
+  ('pkg_resources',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\pkg_resources\\__init__.py',
+   'PYMODULE'),
+  ('pkgutil',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\pkgutil.py',
+   'PYMODULE'),
+  ('platform',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\platform.py',
+   'PYMODULE'),
+  ('plistlib',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\plistlib.py',
+   'PYMODULE'),
+  ('pprint',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\pprint.py',
+   'PYMODULE'),
+  ('proxy_tools',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\proxy_tools\\__init__.py',
+   'PYMODULE'),
+  ('py_compile',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\py_compile.py',
+   'PYMODULE'),
+  ('pycparser',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\pycparser\\__init__.py',
+   'PYMODULE'),
+  ('pycparser.ast_transforms',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\pycparser\\ast_transforms.py',
+   'PYMODULE'),
+  ('pycparser.c_ast',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\pycparser\\c_ast.py',
+   'PYMODULE'),
+  ('pycparser.c_lexer',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\pycparser\\c_lexer.py',
+   'PYMODULE'),
+  ('pycparser.c_parser',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\pycparser\\c_parser.py',
+   'PYMODULE'),
+  ('pydoc',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\pydoc.py',
+   'PYMODULE'),
+  ('pydoc_data',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\pydoc_data\\__init__.py',
+   'PYMODULE'),
+  ('pydoc_data.topics',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\pydoc_data\\topics.py',
+   'PYMODULE'),
+  ('pythonnet',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\pythonnet\\__init__.py',
+   'PYMODULE'),
+  ('queue',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\queue.py',
+   'PYMODULE'),
+  ('quopri',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\quopri.py',
+   'PYMODULE'),
+  ('random',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\random.py',
+   'PYMODULE'),
+  ('rlcompleter',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\rlcompleter.py',
+   'PYMODULE'),
+  ('runpy',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\runpy.py',
+   'PYMODULE'),
+  ('secrets',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\secrets.py',
+   'PYMODULE'),
+  ('selectors',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\selectors.py',
+   'PYMODULE'),
+  ('setuptools',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\__init__.py',
+   'PYMODULE'),
+  ('setuptools._core_metadata',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\_core_metadata.py',
+   'PYMODULE'),
+  ('setuptools._distutils',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\_distutils\\__init__.py',
+   'PYMODULE'),
+  ('setuptools._distutils._log',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\_distutils\\_log.py',
+   'PYMODULE'),
+  ('setuptools._distutils._macos_compat',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\_distutils\\_macos_compat.py',
+   'PYMODULE'),
+  ('setuptools._distutils._modified',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\_distutils\\_modified.py',
+   'PYMODULE'),
+  ('setuptools._distutils._msvccompiler',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\_distutils\\_msvccompiler.py',
+   'PYMODULE'),
+  ('setuptools._distutils.archive_util',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\_distutils\\archive_util.py',
+   'PYMODULE'),
+  ('setuptools._distutils.ccompiler',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\_distutils\\ccompiler.py',
+   'PYMODULE'),
+  ('setuptools._distutils.cmd',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\_distutils\\cmd.py',
+   'PYMODULE'),
+  ('setuptools._distutils.command',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\_distutils\\command\\__init__.py',
+   'PYMODULE'),
+  ('setuptools._distutils.command._framework_compat',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\_distutils\\command\\_framework_compat.py',
+   'PYMODULE'),
+  ('setuptools._distutils.command.bdist',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\_distutils\\command\\bdist.py',
+   'PYMODULE'),
+  ('setuptools._distutils.command.bdist_dumb',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\_distutils\\command\\bdist_dumb.py',
+   'PYMODULE'),
+  ('setuptools._distutils.command.bdist_rpm',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\_distutils\\command\\bdist_rpm.py',
+   'PYMODULE'),
+  ('setuptools._distutils.command.build',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\_distutils\\command\\build.py',
+   'PYMODULE'),
+  ('setuptools._distutils.command.build_clib',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\_distutils\\command\\build_clib.py',
+   'PYMODULE'),
+  ('setuptools._distutils.command.build_ext',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\_distutils\\command\\build_ext.py',
+   'PYMODULE'),
+  ('setuptools._distutils.command.build_py',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\_distutils\\command\\build_py.py',
+   'PYMODULE'),
+  ('setuptools._distutils.command.build_scripts',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\_distutils\\command\\build_scripts.py',
+   'PYMODULE'),
+  ('setuptools._distutils.command.check',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\_distutils\\command\\check.py',
+   'PYMODULE'),
+  ('setuptools._distutils.command.clean',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\_distutils\\command\\clean.py',
+   'PYMODULE'),
+  ('setuptools._distutils.command.config',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\_distutils\\command\\config.py',
+   'PYMODULE'),
+  ('setuptools._distutils.command.install',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\_distutils\\command\\install.py',
+   'PYMODULE'),
+  ('setuptools._distutils.command.install_data',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\_distutils\\command\\install_data.py',
+   'PYMODULE'),
+  ('setuptools._distutils.command.install_egg_info',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\_distutils\\command\\install_egg_info.py',
+   'PYMODULE'),
+  ('setuptools._distutils.command.install_headers',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\_distutils\\command\\install_headers.py',
+   'PYMODULE'),
+  ('setuptools._distutils.command.install_lib',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\_distutils\\command\\install_lib.py',
+   'PYMODULE'),
+  ('setuptools._distutils.command.install_scripts',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\_distutils\\command\\install_scripts.py',
+   'PYMODULE'),
+  ('setuptools._distutils.command.sdist',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\_distutils\\command\\sdist.py',
+   'PYMODULE'),
+  ('setuptools._distutils.compat',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\_distutils\\compat\\__init__.py',
+   'PYMODULE'),
+  ('setuptools._distutils.compat.numpy',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\_distutils\\compat\\numpy.py',
+   'PYMODULE'),
+  ('setuptools._distutils.compat.py39',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\_distutils\\compat\\py39.py',
+   'PYMODULE'),
+  ('setuptools._distutils.compilers', '-', 'PYMODULE'),
+  ('setuptools._distutils.compilers.C', '-', 'PYMODULE'),
+  ('setuptools._distutils.compilers.C.base',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\_distutils\\compilers\\C\\base.py',
+   'PYMODULE'),
+  ('setuptools._distutils.compilers.C.cygwin',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\_distutils\\compilers\\C\\cygwin.py',
+   'PYMODULE'),
+  ('setuptools._distutils.compilers.C.errors',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\_distutils\\compilers\\C\\errors.py',
+   'PYMODULE'),
+  ('setuptools._distutils.compilers.C.msvc',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\_distutils\\compilers\\C\\msvc.py',
+   'PYMODULE'),
+  ('setuptools._distutils.compilers.C.unix',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\_distutils\\compilers\\C\\unix.py',
+   'PYMODULE'),
+  ('setuptools._distutils.compilers.C.zos',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\_distutils\\compilers\\C\\zos.py',
+   'PYMODULE'),
+  ('setuptools._distutils.core',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\_distutils\\core.py',
+   'PYMODULE'),
+  ('setuptools._distutils.cygwinccompiler',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\_distutils\\cygwinccompiler.py',
+   'PYMODULE'),
+  ('setuptools._distutils.debug',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\_distutils\\debug.py',
+   'PYMODULE'),
+  ('setuptools._distutils.dep_util',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\_distutils\\dep_util.py',
+   'PYMODULE'),
+  ('setuptools._distutils.dir_util',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\_distutils\\dir_util.py',
+   'PYMODULE'),
+  ('setuptools._distutils.dist',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\_distutils\\dist.py',
+   'PYMODULE'),
+  ('setuptools._distutils.errors',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\_distutils\\errors.py',
+   'PYMODULE'),
+  ('setuptools._distutils.extension',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\_distutils\\extension.py',
+   'PYMODULE'),
+  ('setuptools._distutils.fancy_getopt',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\_distutils\\fancy_getopt.py',
+   'PYMODULE'),
+  ('setuptools._distutils.file_util',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\_distutils\\file_util.py',
+   'PYMODULE'),
+  ('setuptools._distutils.filelist',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\_distutils\\filelist.py',
+   'PYMODULE'),
+  ('setuptools._distutils.log',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\_distutils\\log.py',
+   'PYMODULE'),
+  ('setuptools._distutils.spawn',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\_distutils\\spawn.py',
+   'PYMODULE'),
+  ('setuptools._distutils.sysconfig',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\_distutils\\sysconfig.py',
+   'PYMODULE'),
+  ('setuptools._distutils.text_file',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\_distutils\\text_file.py',
+   'PYMODULE'),
+  ('setuptools._distutils.unixccompiler',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\_distutils\\unixccompiler.py',
+   'PYMODULE'),
+  ('setuptools._distutils.util',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\_distutils\\util.py',
+   'PYMODULE'),
+  ('setuptools._distutils.version',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\_distutils\\version.py',
+   'PYMODULE'),
+  ('setuptools._distutils.versionpredicate',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\_distutils\\versionpredicate.py',
+   'PYMODULE'),
+  ('setuptools._distutils.zosccompiler',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\_distutils\\zosccompiler.py',
+   'PYMODULE'),
+  ('setuptools._entry_points',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\_entry_points.py',
+   'PYMODULE'),
+  ('setuptools._imp',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\_imp.py',
+   'PYMODULE'),
+  ('setuptools._importlib',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\_importlib.py',
+   'PYMODULE'),
+  ('setuptools._itertools',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\_itertools.py',
+   'PYMODULE'),
+  ('setuptools._normalization',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\_normalization.py',
+   'PYMODULE'),
+  ('setuptools._path',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\_path.py',
+   'PYMODULE'),
+  ('setuptools._reqs',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\_reqs.py',
+   'PYMODULE'),
+  ('setuptools._shutil',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\_shutil.py',
+   'PYMODULE'),
+  ('setuptools._static',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\_static.py',
+   'PYMODULE'),
+  ('setuptools._vendor', '-', 'PYMODULE'),
+  ('setuptools._vendor.backports',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\_vendor\\backports\\__init__.py',
+   'PYMODULE'),
+  ('setuptools._vendor.backports.tarfile',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\_vendor\\backports\\tarfile\\__init__.py',
+   'PYMODULE'),
+  ('setuptools._vendor.backports.tarfile.compat',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\_vendor\\backports\\tarfile\\compat\\__init__.py',
+   'PYMODULE'),
+  ('setuptools._vendor.backports.tarfile.compat.py38',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\_vendor\\backports\\tarfile\\compat\\py38.py',
+   'PYMODULE'),
+  ('setuptools._vendor.importlib_metadata',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\_vendor\\importlib_metadata\\__init__.py',
+   'PYMODULE'),
+  ('setuptools._vendor.importlib_metadata._adapters',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\_vendor\\importlib_metadata\\_adapters.py',
+   'PYMODULE'),
+  ('setuptools._vendor.importlib_metadata._collections',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\_vendor\\importlib_metadata\\_collections.py',
+   'PYMODULE'),
+  ('setuptools._vendor.importlib_metadata._compat',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\_vendor\\importlib_metadata\\_compat.py',
+   'PYMODULE'),
+  ('setuptools._vendor.importlib_metadata._functools',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\_vendor\\importlib_metadata\\_functools.py',
+   'PYMODULE'),
+  ('setuptools._vendor.importlib_metadata._itertools',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\_vendor\\importlib_metadata\\_itertools.py',
+   'PYMODULE'),
+  ('setuptools._vendor.importlib_metadata._meta',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\_vendor\\importlib_metadata\\_meta.py',
+   'PYMODULE'),
+  ('setuptools._vendor.importlib_metadata._text',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\_vendor\\importlib_metadata\\_text.py',
+   'PYMODULE'),
+  ('setuptools._vendor.importlib_metadata.compat',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\_vendor\\importlib_metadata\\compat\\__init__.py',
+   'PYMODULE'),
+  ('setuptools._vendor.importlib_metadata.compat.py311',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\_vendor\\importlib_metadata\\compat\\py311.py',
+   'PYMODULE'),
+  ('setuptools._vendor.importlib_metadata.compat.py39',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\_vendor\\importlib_metadata\\compat\\py39.py',
+   'PYMODULE'),
+  ('setuptools._vendor.jaraco', '-', 'PYMODULE'),
+  ('setuptools._vendor.jaraco.context',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\_vendor\\jaraco\\context.py',
+   'PYMODULE'),
+  ('setuptools._vendor.jaraco.functools',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\_vendor\\jaraco\\functools\\__init__.py',
+   'PYMODULE'),
+  ('setuptools._vendor.jaraco.text',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\_vendor\\jaraco\\text\\__init__.py',
+   'PYMODULE'),
+  ('setuptools._vendor.more_itertools',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\_vendor\\more_itertools\\__init__.py',
+   'PYMODULE'),
+  ('setuptools._vendor.more_itertools.more',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\_vendor\\more_itertools\\more.py',
+   'PYMODULE'),
+  ('setuptools._vendor.more_itertools.recipes',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\_vendor\\more_itertools\\recipes.py',
+   'PYMODULE'),
+  ('setuptools._vendor.packaging',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\_vendor\\packaging\\__init__.py',
+   'PYMODULE'),
+  ('setuptools._vendor.packaging._elffile',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\_vendor\\packaging\\_elffile.py',
+   'PYMODULE'),
+  ('setuptools._vendor.packaging._manylinux',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\_vendor\\packaging\\_manylinux.py',
+   'PYMODULE'),
+  ('setuptools._vendor.packaging._musllinux',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\_vendor\\packaging\\_musllinux.py',
+   'PYMODULE'),
+  ('setuptools._vendor.packaging._parser',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\_vendor\\packaging\\_parser.py',
+   'PYMODULE'),
+  ('setuptools._vendor.packaging._structures',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\_vendor\\packaging\\_structures.py',
+   'PYMODULE'),
+  ('setuptools._vendor.packaging._tokenizer',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\_vendor\\packaging\\_tokenizer.py',
+   'PYMODULE'),
+  ('setuptools._vendor.packaging.markers',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\_vendor\\packaging\\markers.py',
+   'PYMODULE'),
+  ('setuptools._vendor.packaging.requirements',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\_vendor\\packaging\\requirements.py',
+   'PYMODULE'),
+  ('setuptools._vendor.packaging.specifiers',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\_vendor\\packaging\\specifiers.py',
+   'PYMODULE'),
+  ('setuptools._vendor.packaging.tags',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\_vendor\\packaging\\tags.py',
+   'PYMODULE'),
+  ('setuptools._vendor.packaging.utils',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\_vendor\\packaging\\utils.py',
+   'PYMODULE'),
+  ('setuptools._vendor.packaging.version',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\_vendor\\packaging\\version.py',
+   'PYMODULE'),
+  ('setuptools._vendor.platformdirs',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\_vendor\\platformdirs\\__init__.py',
+   'PYMODULE'),
+  ('setuptools._vendor.platformdirs.android',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\_vendor\\platformdirs\\android.py',
+   'PYMODULE'),
+  ('setuptools._vendor.platformdirs.api',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\_vendor\\platformdirs\\api.py',
+   'PYMODULE'),
+  ('setuptools._vendor.platformdirs.macos',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\_vendor\\platformdirs\\macos.py',
+   'PYMODULE'),
+  ('setuptools._vendor.platformdirs.unix',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\_vendor\\platformdirs\\unix.py',
+   'PYMODULE'),
+  ('setuptools._vendor.platformdirs.version',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\_vendor\\platformdirs\\version.py',
+   'PYMODULE'),
+  ('setuptools._vendor.platformdirs.windows',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\_vendor\\platformdirs\\windows.py',
+   'PYMODULE'),
+  ('setuptools._vendor.tomli',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\_vendor\\tomli\\__init__.py',
+   'PYMODULE'),
+  ('setuptools._vendor.tomli._parser',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\_vendor\\tomli\\_parser.py',
+   'PYMODULE'),
+  ('setuptools._vendor.tomli._re',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\_vendor\\tomli\\_re.py',
+   'PYMODULE'),
+  ('setuptools._vendor.tomli._types',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\_vendor\\tomli\\_types.py',
+   'PYMODULE'),
+  ('setuptools._vendor.wheel',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\_vendor\\wheel\\__init__.py',
+   'PYMODULE'),
+  ('setuptools._vendor.wheel.cli',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\_vendor\\wheel\\cli\\__init__.py',
+   'PYMODULE'),
+  ('setuptools._vendor.wheel.cli.convert',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\_vendor\\wheel\\cli\\convert.py',
+   'PYMODULE'),
+  ('setuptools._vendor.wheel.cli.pack',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\_vendor\\wheel\\cli\\pack.py',
+   'PYMODULE'),
+  ('setuptools._vendor.wheel.cli.tags',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\_vendor\\wheel\\cli\\tags.py',
+   'PYMODULE'),
+  ('setuptools._vendor.wheel.cli.unpack',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\_vendor\\wheel\\cli\\unpack.py',
+   'PYMODULE'),
+  ('setuptools._vendor.wheel.macosx_libfile',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\_vendor\\wheel\\macosx_libfile.py',
+   'PYMODULE'),
+  ('setuptools._vendor.wheel.metadata',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\_vendor\\wheel\\metadata.py',
+   'PYMODULE'),
+  ('setuptools._vendor.wheel.util',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\_vendor\\wheel\\util.py',
+   'PYMODULE'),
+  ('setuptools._vendor.wheel.vendored',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\_vendor\\wheel\\vendored\\__init__.py',
+   'PYMODULE'),
+  ('setuptools._vendor.wheel.vendored.packaging',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\_vendor\\wheel\\vendored\\packaging\\__init__.py',
+   'PYMODULE'),
+  ('setuptools._vendor.wheel.vendored.packaging._elffile',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\_vendor\\wheel\\vendored\\packaging\\_elffile.py',
+   'PYMODULE'),
+  ('setuptools._vendor.wheel.vendored.packaging._manylinux',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\_vendor\\wheel\\vendored\\packaging\\_manylinux.py',
+   'PYMODULE'),
+  ('setuptools._vendor.wheel.vendored.packaging._musllinux',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\_vendor\\wheel\\vendored\\packaging\\_musllinux.py',
+   'PYMODULE'),
+  ('setuptools._vendor.wheel.vendored.packaging._parser',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\_vendor\\wheel\\vendored\\packaging\\_parser.py',
+   'PYMODULE'),
+  ('setuptools._vendor.wheel.vendored.packaging._structures',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\_vendor\\wheel\\vendored\\packaging\\_structures.py',
+   'PYMODULE'),
+  ('setuptools._vendor.wheel.vendored.packaging._tokenizer',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\_vendor\\wheel\\vendored\\packaging\\_tokenizer.py',
+   'PYMODULE'),
+  ('setuptools._vendor.wheel.vendored.packaging.markers',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\_vendor\\wheel\\vendored\\packaging\\markers.py',
+   'PYMODULE'),
+  ('setuptools._vendor.wheel.vendored.packaging.requirements',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\_vendor\\wheel\\vendored\\packaging\\requirements.py',
+   'PYMODULE'),
+  ('setuptools._vendor.wheel.vendored.packaging.specifiers',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\_vendor\\wheel\\vendored\\packaging\\specifiers.py',
+   'PYMODULE'),
+  ('setuptools._vendor.wheel.vendored.packaging.tags',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\_vendor\\wheel\\vendored\\packaging\\tags.py',
+   'PYMODULE'),
+  ('setuptools._vendor.wheel.vendored.packaging.utils',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\_vendor\\wheel\\vendored\\packaging\\utils.py',
+   'PYMODULE'),
+  ('setuptools._vendor.wheel.vendored.packaging.version',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\_vendor\\wheel\\vendored\\packaging\\version.py',
+   'PYMODULE'),
+  ('setuptools._vendor.wheel.wheelfile',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\_vendor\\wheel\\wheelfile.py',
+   'PYMODULE'),
+  ('setuptools._vendor.zipp',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\_vendor\\zipp\\__init__.py',
+   'PYMODULE'),
+  ('setuptools._vendor.zipp.compat',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\_vendor\\zipp\\compat\\__init__.py',
+   'PYMODULE'),
+  ('setuptools._vendor.zipp.compat.py310',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\_vendor\\zipp\\compat\\py310.py',
+   'PYMODULE'),
+  ('setuptools._vendor.zipp.glob',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\_vendor\\zipp\\glob.py',
+   'PYMODULE'),
+  ('setuptools.archive_util',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\archive_util.py',
+   'PYMODULE'),
+  ('setuptools.command',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\command\\__init__.py',
+   'PYMODULE'),
+  ('setuptools.command._requirestxt',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\command\\_requirestxt.py',
+   'PYMODULE'),
+  ('setuptools.command.bdist_egg',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\command\\bdist_egg.py',
+   'PYMODULE'),
+  ('setuptools.command.bdist_wheel',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\command\\bdist_wheel.py',
+   'PYMODULE'),
+  ('setuptools.command.build',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\command\\build.py',
+   'PYMODULE'),
+  ('setuptools.command.egg_info',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\command\\egg_info.py',
+   'PYMODULE'),
+  ('setuptools.command.sdist',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\command\\sdist.py',
+   'PYMODULE'),
+  ('setuptools.command.setopt',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\command\\setopt.py',
+   'PYMODULE'),
+  ('setuptools.compat',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\compat\\__init__.py',
+   'PYMODULE'),
+  ('setuptools.compat.py310',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\compat\\py310.py',
+   'PYMODULE'),
+  ('setuptools.compat.py311',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\compat\\py311.py',
+   'PYMODULE'),
+  ('setuptools.compat.py39',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\compat\\py39.py',
+   'PYMODULE'),
+  ('setuptools.config',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\config\\__init__.py',
+   'PYMODULE'),
+  ('setuptools.config._apply_pyprojecttoml',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\config\\_apply_pyprojecttoml.py',
+   'PYMODULE'),
+  ('setuptools.config._validate_pyproject',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\config\\_validate_pyproject\\__init__.py',
+   'PYMODULE'),
+  ('setuptools.config._validate_pyproject.error_reporting',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\config\\_validate_pyproject\\error_reporting.py',
+   'PYMODULE'),
+  ('setuptools.config._validate_pyproject.extra_validations',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\config\\_validate_pyproject\\extra_validations.py',
+   'PYMODULE'),
+  ('setuptools.config._validate_pyproject.fastjsonschema_exceptions',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\config\\_validate_pyproject\\fastjsonschema_exceptions.py',
+   'PYMODULE'),
+  ('setuptools.config._validate_pyproject.fastjsonschema_validations',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\config\\_validate_pyproject\\fastjsonschema_validations.py',
+   'PYMODULE'),
+  ('setuptools.config._validate_pyproject.formats',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\config\\_validate_pyproject\\formats.py',
+   'PYMODULE'),
+  ('setuptools.config.expand',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\config\\expand.py',
+   'PYMODULE'),
+  ('setuptools.config.pyprojecttoml',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\config\\pyprojecttoml.py',
+   'PYMODULE'),
+  ('setuptools.config.setupcfg',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\config\\setupcfg.py',
+   'PYMODULE'),
+  ('setuptools.depends',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\depends.py',
+   'PYMODULE'),
+  ('setuptools.discovery',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\discovery.py',
+   'PYMODULE'),
+  ('setuptools.dist',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\dist.py',
+   'PYMODULE'),
+  ('setuptools.errors',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\errors.py',
+   'PYMODULE'),
+  ('setuptools.extension',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\extension.py',
+   'PYMODULE'),
+  ('setuptools.glob',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\glob.py',
+   'PYMODULE'),
+  ('setuptools.installer',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\installer.py',
+   'PYMODULE'),
+  ('setuptools.logging',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\logging.py',
+   'PYMODULE'),
+  ('setuptools.monkey',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\monkey.py',
+   'PYMODULE'),
+  ('setuptools.msvc',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\msvc.py',
+   'PYMODULE'),
+  ('setuptools.unicode_utils',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\unicode_utils.py',
+   'PYMODULE'),
+  ('setuptools.version',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\version.py',
+   'PYMODULE'),
+  ('setuptools.warnings',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\warnings.py',
+   'PYMODULE'),
+  ('setuptools.wheel',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\wheel.py',
+   'PYMODULE'),
+  ('setuptools.windows_support',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\setuptools\\windows_support.py',
+   'PYMODULE'),
+  ('shlex',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\shlex.py',
+   'PYMODULE'),
+  ('shutil',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\shutil.py',
+   'PYMODULE'),
+  ('signal',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\signal.py',
+   'PYMODULE'),
+  ('site',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\site.py',
+   'PYMODULE'),
+  ('socket',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\socket.py',
+   'PYMODULE'),
+  ('socketserver',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\socketserver.py',
+   'PYMODULE'),
+  ('ssl',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\ssl.py',
+   'PYMODULE'),
+  ('statistics',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\statistics.py',
+   'PYMODULE'),
+  ('string',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\string.py',
+   'PYMODULE'),
+  ('stringprep',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\stringprep.py',
+   'PYMODULE'),
+  ('subprocess',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\subprocess.py',
+   'PYMODULE'),
+  ('sysconfig',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\sysconfig.py',
+   'PYMODULE'),
+  ('tarfile',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\tarfile.py',
+   'PYMODULE'),
+  ('tempfile',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\tempfile.py',
+   'PYMODULE'),
+  ('textwrap',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\textwrap.py',
+   'PYMODULE'),
+  ('threading',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\threading.py',
+   'PYMODULE'),
+  ('token',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\token.py',
+   'PYMODULE'),
+  ('tokenize',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\tokenize.py',
+   'PYMODULE'),
+  ('tomllib',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\tomllib\\__init__.py',
+   'PYMODULE'),
+  ('tomllib._parser',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\tomllib\\_parser.py',
+   'PYMODULE'),
+  ('tomllib._re',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\tomllib\\_re.py',
+   'PYMODULE'),
+  ('tomllib._types',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\tomllib\\_types.py',
+   'PYMODULE'),
+  ('tracemalloc',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\tracemalloc.py',
+   'PYMODULE'),
+  ('tty',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\tty.py',
+   'PYMODULE'),
+  ('typing',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\typing.py',
+   'PYMODULE'),
+  ('typing_extensions',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\typing_extensions.py',
+   'PYMODULE'),
+  ('unittest',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\unittest\\__init__.py',
+   'PYMODULE'),
+  ('unittest._log',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\unittest\\_log.py',
+   'PYMODULE'),
+  ('unittest.async_case',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\unittest\\async_case.py',
+   'PYMODULE'),
+  ('unittest.case',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\unittest\\case.py',
+   'PYMODULE'),
+  ('unittest.loader',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\unittest\\loader.py',
+   'PYMODULE'),
+  ('unittest.main',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\unittest\\main.py',
+   'PYMODULE'),
+  ('unittest.mock',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\unittest\\mock.py',
+   'PYMODULE'),
+  ('unittest.result',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\unittest\\result.py',
+   'PYMODULE'),
+  ('unittest.runner',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\unittest\\runner.py',
+   'PYMODULE'),
+  ('unittest.signals',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\unittest\\signals.py',
+   'PYMODULE'),
+  ('unittest.suite',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\unittest\\suite.py',
+   'PYMODULE'),
+  ('unittest.util',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\unittest\\util.py',
+   'PYMODULE'),
+  ('urllib',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\urllib\\__init__.py',
+   'PYMODULE'),
+  ('urllib.error',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\urllib\\error.py',
+   'PYMODULE'),
+  ('urllib.parse',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\urllib\\parse.py',
+   'PYMODULE'),
+  ('urllib.request',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\urllib\\request.py',
+   'PYMODULE'),
+  ('urllib.response',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\urllib\\response.py',
+   'PYMODULE'),
+  ('uuid',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\uuid.py',
+   'PYMODULE'),
+  ('webbrowser',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\webbrowser.py',
+   'PYMODULE'),
+  ('webview',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\webview\\__init__.py',
+   'PYMODULE'),
+  ('webview.dom',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\webview\\dom\\__init__.py',
+   'PYMODULE'),
+  ('webview.dom.classlist',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\webview\\dom\\classlist.py',
+   'PYMODULE'),
+  ('webview.dom.dom',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\webview\\dom\\dom.py',
+   'PYMODULE'),
+  ('webview.dom.element',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\webview\\dom\\element.py',
+   'PYMODULE'),
+  ('webview.dom.event',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\webview\\dom\\event.py',
+   'PYMODULE'),
+  ('webview.dom.propsdict',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\webview\\dom\\propsdict.py',
+   'PYMODULE'),
+  ('webview.errors',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\webview\\errors.py',
+   'PYMODULE'),
+  ('webview.event',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\webview\\event.py',
+   'PYMODULE'),
+  ('webview.guilib',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\webview\\guilib.py',
+   'PYMODULE'),
+  ('webview.http',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\webview\\http.py',
+   'PYMODULE'),
+  ('webview.localization',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\webview\\localization.py',
+   'PYMODULE'),
+  ('webview.menu',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\webview\\menu.py',
+   'PYMODULE'),
+  ('webview.models',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\webview\\models.py',
+   'PYMODULE'),
+  ('webview.platforms',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\webview\\platforms\\__init__.py',
+   'PYMODULE'),
+  ('webview.platforms.android',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\webview\\platforms\\android\\__init__.py',
+   'PYMODULE'),
+  ('webview.platforms.android.app',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\webview\\platforms\\android\\app.py',
+   'PYMODULE'),
+  ('webview.platforms.android.base',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\webview\\platforms\\android\\base.py',
+   'PYMODULE'),
+  ('webview.platforms.android.event',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\webview\\platforms\\android\\event.py',
+   'PYMODULE'),
+  ('webview.platforms.android.jclass',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\webview\\platforms\\android\\jclass\\__init__.py',
+   'PYMODULE'),
+  ('webview.platforms.android.jclass.app',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\webview\\platforms\\android\\jclass\\app.py',
+   'PYMODULE'),
+  ('webview.platforms.android.jclass.content',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\webview\\platforms\\android\\jclass\\content.py',
+   'PYMODULE'),
+  ('webview.platforms.android.jclass.net',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\webview\\platforms\\android\\jclass\\net.py',
+   'PYMODULE'),
+  ('webview.platforms.android.jclass.os',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\webview\\platforms\\android\\jclass\\os.py',
+   'PYMODULE'),
+  ('webview.platforms.android.jclass.view',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\webview\\platforms\\android\\jclass\\view.py',
+   'PYMODULE'),
+  ('webview.platforms.android.jclass.webkit',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\webview\\platforms\\android\\jclass\\webkit.py',
+   'PYMODULE'),
+  ('webview.platforms.android.jinterface',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\webview\\platforms\\android\\jinterface\\__init__.py',
+   'PYMODULE'),
+  ('webview.platforms.android.jinterface.pywebview',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\webview\\platforms\\android\\jinterface\\pywebview.py',
+   'PYMODULE'),
+  ('webview.platforms.android.jinterface.view',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\webview\\platforms\\android\\jinterface\\view.py',
+   'PYMODULE'),
+  ('webview.platforms.android.jinterface.webkit',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\webview\\platforms\\android\\jinterface\\webkit.py',
+   'PYMODULE'),
+  ('webview.platforms.cef',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\webview\\platforms\\cef.py',
+   'PYMODULE'),
+  ('webview.platforms.cocoa',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\webview\\platforms\\cocoa.py',
+   'PYMODULE'),
+  ('webview.platforms.edgechromium',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\webview\\platforms\\edgechromium.py',
+   'PYMODULE'),
+  ('webview.platforms.gtk',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\webview\\platforms\\gtk.py',
+   'PYMODULE'),
+  ('webview.platforms.mshtml',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\webview\\platforms\\mshtml.py',
+   'PYMODULE'),
+  ('webview.platforms.qt',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\webview\\platforms\\qt.py',
+   'PYMODULE'),
+  ('webview.platforms.win32',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\webview\\platforms\\win32.py',
+   'PYMODULE'),
+  ('webview.platforms.winforms',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\webview\\platforms\\winforms.py',
+   'PYMODULE'),
+  ('webview.screen',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\webview\\screen.py',
+   'PYMODULE'),
+  ('webview.state',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\webview\\state.py',
+   'PYMODULE'),
+  ('webview.util',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\webview\\util.py',
+   'PYMODULE'),
+  ('webview.window',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\webview\\window.py',
+   'PYMODULE'),
+  ('wsgiref',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\wsgiref\\__init__.py',
+   'PYMODULE'),
+  ('wsgiref.handlers',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\wsgiref\\handlers.py',
+   'PYMODULE'),
+  ('wsgiref.headers',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\wsgiref\\headers.py',
+   'PYMODULE'),
+  ('wsgiref.simple_server',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\wsgiref\\simple_server.py',
+   'PYMODULE'),
+  ('wsgiref.types',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\wsgiref\\types.py',
+   'PYMODULE'),
+  ('wsgiref.util',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\wsgiref\\util.py',
+   'PYMODULE'),
+  ('xml',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\xml\\__init__.py',
+   'PYMODULE'),
+  ('xml.etree',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\xml\\etree\\__init__.py',
+   'PYMODULE'),
+  ('xml.etree.ElementInclude',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\xml\\etree\\ElementInclude.py',
+   'PYMODULE'),
+  ('xml.etree.ElementPath',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\xml\\etree\\ElementPath.py',
+   'PYMODULE'),
+  ('xml.etree.ElementTree',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\xml\\etree\\ElementTree.py',
+   'PYMODULE'),
+  ('xml.etree.cElementTree',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\xml\\etree\\cElementTree.py',
+   'PYMODULE'),
+  ('xml.parsers',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\xml\\parsers\\__init__.py',
+   'PYMODULE'),
+  ('xml.parsers.expat',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\xml\\parsers\\expat.py',
+   'PYMODULE'),
+  ('xml.sax',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\xml\\sax\\__init__.py',
+   'PYMODULE'),
+  ('xml.sax._exceptions',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\xml\\sax\\_exceptions.py',
+   'PYMODULE'),
+  ('xml.sax.expatreader',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\xml\\sax\\expatreader.py',
+   'PYMODULE'),
+  ('xml.sax.handler',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\xml\\sax\\handler.py',
+   'PYMODULE'),
+  ('xml.sax.saxutils',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\xml\\sax\\saxutils.py',
+   'PYMODULE'),
+  ('xml.sax.xmlreader',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\xml\\sax\\xmlreader.py',
+   'PYMODULE'),
+  ('xmlrpc',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\xmlrpc\\__init__.py',
+   'PYMODULE'),
+  ('xmlrpc.client',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\xmlrpc\\client.py',
+   'PYMODULE'),
+  ('zipfile',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\zipfile.py',
+   'PYMODULE'),
+  ('zipimport',
+   'C:\\Users\\Moses '
+   'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\Lib\\zipimport.py',
+   'PYMODULE')])

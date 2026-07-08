@@ -1,0 +1,20 @@
+# Tauri build artifacts
+src-tauri/target/
+src-tauri/gen/
+
+# Node
+node_modules/
+package-lock.json
+
+# Logs
+*.log
+.npm
+.yarn
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/

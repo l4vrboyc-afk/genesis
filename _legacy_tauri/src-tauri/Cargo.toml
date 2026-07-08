@@ -1,0 +1,36 @@
+[package]
+name = "genesis-shell"
+version = "0.1.0"
+description = "Genesis Trading Bot native desktop shell (Tauri 2.x)"
+authors = ["Genesis"]
+edition = "2021"
+rust-version = "1.77"
+
+# The `lib` name maps to `desktop_lib::*` in main.rs. Keeping primary
+# logic in lib.rs lets us share it (and write integration tests later)
+# without re-spelling the binary entry.
+[lib]
+name = "desktop_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+tauri = { version = "2", features = ["tray-icon", "image-png"] }
+tauri-plugin-shell = "2"
+tauri-plugin-opener = "2"
+tauri-plugin-single-instance = { version = "2", features = ["deep-link"] }
+
+# Logging is helpful when debugging the first warm-cache compile.
+log = "0.4"
+open = "5.3"
+
+[features]
+# This feature is used for production builds or when a dev server is not specified,
+# DO NOT REMOVE!!
+custom-protocol = ["tauri/custom-protocol"]
+default = ["custom-protocol"]

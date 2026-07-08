@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Genesis — Ask Claude</title>
+  <meta name="viewport" content="width=480, initial-scale=1" />
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0d1117;
+      --fg: #c9d1d9;
+      --muted: #8b949e;
+      --accent: #58a6ff;
+      --code-bg: #161b22;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 36px 32px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--fg);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      text-align: center;
+    }
+    h1 {
+      color: var(--accent);
+      margin: 0 0 14px 0;
+      font-size: 1.6rem;
+      letter-spacing: 0.01em;
+    }
+    .badge {
+      display: inline-block;
+      margin-bottom: 24px;
+      padding: 4px 10px;
+      border: 1px solid #30363d;
+      border-radius: 999px;
+      font-size: 0.75rem;
+      color: var(--muted);
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+    p {
+      color: var(--muted);
+      max-width: 380px;
+      line-height: 1.55;
+      font-size: 0.95rem;
+      margin: 0 0 10px 0;
+    }
+    code {
+      background: var(--code-bg);
+      color: #79c0ff;
+      padding: 1px 6px;
+      border-radius: 4px;
+      font-family: ui-monospace, "SF Mono", Consolas, monospace;
+      font-size: 0.85em;
+    }
+    .footer {
+      margin-top: 32px;
+      font-size: 0.75rem;
+      color: #6e7681;
+    }
+ </style>
+</head>
+<body>
+  <span class="badge">Track (c) — placeholder</span>
+  <h1>Ask Claude</h1>
+  <p>
+    The Claude copilot ships in the next sprint. This window is the
+    second seat reserved for it inside the Genesis Tauri shell.
+ </p>
+  <p>
+    Will be wired through
+    <code>dashboard/backend/copilot.py</code> and surfaced here when
+    track (c) lands.
+ </p>
+  <div class="footer">Genesis Shell &middot; Tauri 2.x</div>
+</body>
+</html>

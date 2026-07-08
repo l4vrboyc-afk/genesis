@@ -1,0 +1,529 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Genesis — Select Profile</title>
+<style>
+:root {
+  --bg: #080a12;
+  --panel: rgba(17, 22, 43, 0.7);
+  --border: rgba(255,255,255,0.08);
+  --text: #f3f4f6;
+  --muted: #9ca3af;
+  --cyan: #00f2fe;
+  --blue: #0070f3;
+  --purple: #b155ff;
+  --green: #00e676;
+  --red: #ff1744;
+  --orange: #ff9100;
+  --glow-cyan: 0 0 20px rgba(0,242,254,0.35);
+  --glow-purple: 0 0 20px rgba(177,85,255,0.35);
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  background: var(--bg);
+  background-image:
+    radial-gradient(circle at 15% 30%, rgba(26,21,62,0.4) 0%, transparent 50%),
+    radial-gradient(circle at 85% 70%, rgba(15,34,64,0.4) 0%, transparent 50%);
+  color: var(--text);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+  user-select: none;
+}
+
+/* ── Branding ─────────────────────────────────────────────── */
+.brand { text-align: center; margin-bottom: 2rem; }
+.brand-icon {
+  font-size: 3rem;
+  background: linear-gradient(135deg, var(--cyan), var(--purple));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0 0 12px rgba(0,242,254,0.5));
+  margin-bottom: 0.5rem;
+}
+.brand h1 {
+  font-size: 2rem; font-weight: 800; letter-spacing: -0.04em;
+  background: linear-gradient(135deg, #fff 0%, #a1a1aa 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+.brand p { color: var(--muted); font-size: 0.95rem; margin-top: 0.4rem; }
+
+/* ── Cards Grid ──────────────────────────────────────────── */
+.cards {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1.25rem;
+  width: 100%;
+  max-width: 960px;
+  margin-bottom: 1.5rem;
+}
+@media (max-width: 850px) { .cards { grid-template-columns: 1fr; max-width: 400px; } }
+
+/* ── Profile Card ────────────────────────────────────────── */
+.card {
+  position: relative;
+  background: var(--panel);
+  border: 1.5px solid var(--border);
+  border-radius: 16px;
+  padding: 1.5rem 1.25rem;
+  cursor: pointer;
+  transition: all 0.25s ease;
+  backdrop-filter: blur(12px);
+  text-align: left;
+}
+.card:hover {
+  transform: translateY(-4px);
+  border-color: rgba(255,255,255,0.18);
+  box-shadow: 0 12px 32px rgba(0,0,0,0.4);
+}
+.card.selected {
+  border-color: var(--cyan);
+  box-shadow: var(--glow-cyan), inset 0 0 30px rgba(0,242,254,0.04);
+  background: rgba(17,22,43,0.92);
+}
+.card-badge {
+  display: inline-flex; align-items: center; gap: 0.35rem;
+  padding: 0.3rem 0.7rem; border-radius: 6px;
+  font-size: 0.65rem; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.06em;
+  margin-bottom: 0.85rem;
+}
+.badge-default { background: rgba(0,112,243,0.15); color: #3b82f6; border: 1px solid rgba(59,130,246,0.25); }
+.badge-scalper { background: rgba(255,145,0,0.15); color: var(--orange); border: 1px solid rgba(255,145,0,0.25); }
+.badge-breakout { background: rgba(177,85,255,0.15); color: var(--purple); border: 1px solid rgba(177,85,255,0.25); }
+
+.card h3 { font-size: 1.1rem; font-weight: 700; margin-bottom: 0.4rem; }
+.card .card-desc {
+  font-size: 0.80rem; color: var(--muted);
+  line-height: 1.5; margin-bottom: 1rem;
+}
+.card-meta { display: flex; flex-direction: column; gap: 0.4rem; }
+.card-meta-row {
+  display: flex; align-items: center; gap: 0.5rem;
+  font-size: 0.78rem; color: var(--muted);
+}
+.card-meta-row .icon { width: 16px; text-align: center; opacity: 0.8; font-size: 0.75rem; }
+.card-meta-row span { color: var(--text); font-weight: 500; }
+
+/* thin focus ring for keyboard users */
+.card:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 2px;
+}
+
+/* ── Preflight Panel ─────────────────────────────────────── */
+.preflight-panel {
+  width: 100%; max-width: 960px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 1rem 1.25rem;
+  margin-bottom: 1.25rem;
+  backdrop-filter: blur(8px);
+  display: none;
+}
+.preflight-panel.visible { display: block; }
+
+.pf-header {
+  display: flex; align-items: center; gap: 0.7rem;
+  margin-bottom: 0.6rem; font-size: 0.85rem; font-weight: 600;
+}
+.pf-header .pf-icon { font-size: 1.1rem; }
+.pf-header .pf-label { color: var(--muted); font-weight: 400; font-size: 0.78rem; }
+
+.pf-list { list-style: none; display: flex; flex-direction: column; gap: 0.3rem; }
+.pf-list li {
+  font-size: 0.78rem;
+  display: flex; align-items: center; gap: 0.5rem;
+  padding: 0.2rem 0;
+}
+.pf-list li.pass { color: #86efac; }
+.pf-list li.fail { color: #fca5a5; }
+.pf-detail {
+  font-size: 0.72rem; color: var(--muted); margin-left: 1.4rem;
+  margin-top: 0.1rem;
+}
+
+/* ── Actions row ─────────────────────────────────────────── */
+.actions { display: flex; align-items: center; gap: 1rem; margin-bottom: 2rem; }
+
+/* ── Launch Button ───────────────────────────────────────── */
+.launch-btn {
+  padding: 0.85rem 3rem;
+  font-size: 1rem; font-weight: 700;
+  letter-spacing: 0.02em;
+  border: none; border-radius: 12px;
+  cursor: pointer;
+  background: linear-gradient(135deg, var(--cyan), var(--blue));
+  color: #000;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 20px rgba(0,242,254,0.2);
+}
+.launch-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 30px rgba(0,242,254,0.35);
+}
+.launch-btn:disabled {
+  opacity: 0.35; cursor: not-allowed; box-shadow: none;
+}
+.launch-btn.loading {
+  opacity: 0.6; cursor: wait;
+}
+
+/* ── Warning inline ─────────────────────────────────────── */
+.launch-warn {
+  font-size: 0.8rem; color: var(--orange);
+  display: none;
+  max-width: 960px;
+  margin-top: -0.5rem;
+  margin-bottom: 1rem;
+  line-height: 1.4;
+}
+.launch-warn.visible { display: block; }
+.launch-error {
+  font-size: 0.8rem; color: var(--red);
+  display: none;
+  max-width: 960px;
+  line-height: 1.4;
+}
+.launch-error.visible { display: block; }
+
+/* ── Loading overlay ─────────────────────────────────────── */
+.overlay {
+  display: none;
+  position: fixed; inset: 0;
+  background: rgba(8,10,18,0.92);
+  backdrop-filter: blur(8px);
+  z-index: 999;
+  flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: 1.25rem;
+}
+.overlay.active { display: flex; }
+.spinner {
+  width: 48px; height: 48px;
+  border: 3px solid rgba(255,255,255,0.1);
+  border-top-color: var(--cyan);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.overlay p {
+  font-size: 1rem; color: var(--muted);
+  text-align: center; line-height: 1.6;
+}
+.overlay .profile-name { color: var(--cyan); font-weight: 700; }
+
+/* ── Footer ──────────────────────────────────────────────── */
+.footer {
+  margin-top: 1.5rem;
+  font-size: 0.72rem;
+  color: rgba(255,255,255,0.2);
+}
+</style>
+</head>
+<body>
+
+<div class="brand">
+  <div class="brand-icon">&#9670;</div>
+  <h1>Genesis Trading Bot</h1>
+  <p>Select a trading profile to begin</p>
+</div>
+
+<!-- Profile cards — always visible, no JS required for rendering -->
+<div class="cards" id="cards">
+  <div class="card" data-profile="default" tabindex="0">
+    <div class="card-badge badge-default">Default</div>
+    <h3>Swing Trader</h3>
+    <p class="card-desc">H4 trend filter with M15 entries. Balanced risk-reward for medium-term positions.</p>
+    <div class="card-meta">
+      <div class="card-meta-row"><span class="icon">&#9201;</span> Timeframes: <span>H4 / M15</span></div>
+      <div class="card-meta-row"><span class="icon">&#128202;</span> Max Positions: <span>3</span></div>
+      <div class="card-meta-row"><span class="icon">&#9889;</span> Risk / Trade: <span>1.0%</span></div>
+      <div class="card-meta-row"><span class="icon">&#128737;</span> R:R Ratio: <span>2.0</span></div>
+    </div>
+  </div>
+
+  <div class="card" data-profile="scalper" tabindex="0">
+    <div class="card-badge badge-scalper">Scalper</div>
+    <h3>Fast Scalper</h3>
+    <p class="card-desc">M15 trend filter with M1 entries. Tight stops, smaller targets, higher frequency.</p>
+    <div class="card-meta">
+      <div class="card-meta-row"><span class="icon">&#9201;</span> Timeframes: <span>M15 / M1</span></div>
+      <div class="card-meta-row"><span class="icon">&#128202;</span> Max Positions: <span>5</span></div>
+      <div class="card-meta-row"><span class="icon">&#9889;</span> Risk / Trade: <span>0.5%</span></div>
+      <div class="card-meta-row"><span class="icon">&#128737;</span> R:R Ratio: <span>1.0</span></div>
+    </div>
+  </div>
+
+  <div class="card" data-profile="breakout" tabindex="0">
+    <div class="card-badge badge-breakout">Breakout</div>
+    <h3>Breakout Hunter</h3>
+    <p class="card-desc">H1 trend filter with M15 entries. Targets range breakouts with wider stops.</p>
+    <div class="card-meta">
+      <div class="card-meta-row"><span class="icon">&#9201;</span> Timeframes: <span>H1 / M15</span></div>
+      <div class="card-meta-row"><span class="icon">&#128202;</span> Max Positions: <span>2</span></div>
+      <div class="card-meta-row"><span class="icon">&#9889;</span> Risk / Trade: <span>1.5%</span></div>
+      <div class="card-meta-row"><span class="icon">&#128737;</span> R:R Ratio: <span>1.5</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- Preflight — advisory, shown after card selection -->
+<div class="preflight-panel" id="preflightPanel">
+  <div class="pf-header">
+    <span class="pf-icon" id="pfIcon">&#9201;</span>
+    <span id="pfLabel">Select a profile to see system checks</span>
+  </div>
+  <ul class="pf-list" id="pfList"></ul>
+</div>
+
+<!-- Launch button — always enabled; preflight is advisory only -->
+<div class="actions">
+  <button class="launch-btn" id="launchBtn" onclick="launchProfile()">
+    Launch Bot
+  </button>
+</div>
+<div class="launch-warn" id="launchWarn"></div>
+<div class="launch-error" id="launchError"></div>
+
+<div class="overlay" id="overlay">
+  <div class="spinner"></div>
+  <p>Starting <span class="profile-name" id="overlayProfile">—</span>&hellip;<br>This may take a few seconds.</p>
+</div>
+
+<div class="footer">Genesis Trading Bot &middot; Paper Trading &middot; Demo Only</div>
+
+<script>
+"use strict";
+let selected = null;
+
+/* ── Card selection ───────────────────────────────────────── */
+function selectProfile(name) {
+  selected = name;
+  // Highlight the chosen card
+  document.querySelectorAll('.card').forEach(c => c.classList.remove('selected'));
+  const card = document.querySelector('.card[data-profile="' + name + '"]');
+  if (card) card.classList.add('selected');
+
+  // Clear previous messages
+  document.getElementById('launchError').classList.remove('visible');
+  document.getElementById('launchError').textContent = '';
+  document.getElementById('launchWarn').classList.remove('visible');
+  document.getElementById('launchWarn').textContent = '';
+
+  // Show preflight panel
+  const panel = document.getElementById('preflightPanel');
+  panel.classList.add('visible');
+  document.getElementById('pfIcon').innerHTML = '<span style="display:inline-block;animation:spin .8s linear infinite">&#8987;</span>';
+  document.getElementById('pfLabel').textContent = 'Running checks…';
+  document.getElementById('pfList').innerHTML = '';
+
+  // Always allow Launch — preflight is advisory
+  const btn = document.getElementById('launchBtn');
+  btn.disabled = false;
+  btn.classList.remove('loading');
+
+  // Fetch live env data if bridge is available
+  if (window.pywebview && window.pywebview.api) {
+    // Fire-and-forget preflight (never blocks launch)
+    runPreflight(name);
+    // Also card details
+    window.pywebview.api.getProfileDetails(name)
+      .then(det => {
+        if (det && det.ok && card) fillCardDetail(card, det);
+      })
+      .catch(() => {});
+  } else {
+    // Bridge not ready yet — show warm status
+    document.getElementById('pfIcon').textContent = '\u{1F7E2}';
+    document.getElementById('pfLabel').textContent = 'Profile selected (offline / bridge loading)';
+    const li = document.createElement('li');
+    li.className = 'pass';
+    li.textContent = '✔ ' + name + ' profile ready';
+    document.getElementById('pfList').appendChild(li);
+  }
+}
+
+/* ── Preflight — advisory, never blocks the launch button ── */
+function runPreflight(name) {
+  if (!window.pywebview || !window.pywebview.api) {
+    document.getElementById('pfIcon').textContent = '\u{1F7E2}';
+    document.getElementById('pfLabel').textContent = 'Profile selected (no bridge)';
+    return;
+  }
+
+  window.pywebview.api.runPreflightCheck(name)
+    .then(res => {
+      if (!res || !res.ok) {
+        document.getElementById('pfIcon').textContent = '\u{1F6AB}';
+        document.getElementById('pfLabel').textContent = 'Preflight error';
+        document.getElementById('pfList').innerHTML =
+          '<li class="fail">Could not reach backend</li>';
+        showWarn('Preflight unreachable — click Launch anyway to try.');
+        return;
+      }
+
+      const list = document.getElementById('pfList');
+      list.innerHTML = '';
+      const checks = res.checks || [];
+      const passed = res.passed;
+
+      checks.forEach(ch => {
+        const li = document.createElement('li');
+        li.className = ch.pass ? 'pass' : 'fail';
+        const icon = ch.pass ? '✔' : '✘';
+        li.textContent = icon + ' ' + ch.name;
+        list.appendChild(li);
+        if (ch.detail) {
+          const d = document.createElement('div');
+          d.className = 'pf-detail';
+          d.textContent = ch.detail;
+          li.appendChild(d);
+        }
+      });
+
+      if (passed) {
+        document.getElementById('pfIcon').textContent = '✅';
+        document.getElementById('pfLabel').textContent = 'All checks passed';
+        document.getElementById('launchWarn').classList.remove('visible');
+      } else {
+        document.getElementById('pfIcon').textContent = '❌';
+        document.getElementById('pfLabel').textContent = 'Some checks failed';
+        const fails = checks.filter(c => !c.pass);
+        const msgs = fails.map(c => c.name + (c.detail ? ': ' + c.detail : ''));
+        showWarn(msgs.join('  ─  '));
+      }
+      // Button stays enabled regardless
+    })
+    .catch(err => {
+      document.getElementById('pfIcon').textContent = '❌';
+      document.getElementById('pfLabel').textContent = 'Check error';
+      showWarn('Preflight threw: ' + (err.message || err) + '  —  click Launch anyway.');
+    });
+}
+
+/* ── Card meta enrichment from live env ──────────────────── */
+function fillCardDetail(cardEl, details) {
+  const meta = cardEl.querySelector('.card-meta');
+  if (!meta) return;
+  meta.innerHTML = '';
+
+  const rows = [
+    { icon: '⏰', label: 'Timeframes:',  value: details.timeframes || '' },
+    { icon: '\u{1F4CA}', label: 'Max Positions:', value: String(details.max_positions ?? '') },
+    { icon: '⚡', label: 'Risk / Trade:',  value: (details.max_risk || '') + '%' },
+    { icon: '\u{1F6E1}', label: 'R:R Ratio:',   value: details.rr_ratio || '' },
+  ];
+  rows.forEach(r => {
+    const div = document.createElement('div');
+    div.className = 'card-meta-row';
+    div.innerHTML = '<span class="icon">' + r.icon + '</span> ' + r.label + ' <span>' + r.value + '</span>';
+    meta.appendChild(div);
+  });
+
+  if (details.description) {
+    const desc = cardEl.querySelector('.card-desc');
+    if (desc) desc.textContent = details.description;
+  }
+}
+
+/* ── Launch ───────────────────────────────────────────────── */
+function launchProfile() {
+  if (!selected) {
+    showError('Please select a profile card first.');
+    return;
+  }
+
+  const label = selected.charAt(0).toUpperCase() + selected.slice(1);
+  document.getElementById('overlayProfile').textContent = label;
+  document.getElementById('overlay').classList.add('active');
+
+  // If bridge not available, inform user
+  if (!window.pywebview || !window.pywebview.api || !window.pywebview.api.selectProfile) {
+    setTimeout(() => {
+      document.getElementById('overlay').classList.remove('active');
+      showError('Bridge not connected. Are you running from Genesis.exe?');
+    }, 3000);
+    return;
+  }
+
+  window.pywebview.api.selectProfile(selected)
+    .then(resp => {
+      if (resp && resp.ok) {
+        // Launcher handles navigation — overlay stays until window redirects
+      } else {
+        document.getElementById('overlay').classList.remove('active');
+        showError('Launch failed: ' + (resp ? resp.error || 'unknown' : 'no response'));
+      }
+    })
+    .catch(err => {
+      document.getElementById('overlay').classList.remove('active');
+      showError('Bridge error: ' + (err.message || err));
+    });
+}
+
+/* ── UI helpers ───────────────────────────────────────────── */
+function showWarn(msg) {
+  const el = document.getElementById('launchWarn');
+  el.textContent = msg;
+  el.classList.add('visible');
+}
+function showError(msg) {
+  const el = document.getElementById('launchError');
+  el.textContent = msg;
+  el.classList.add('visible');
+}
+
+/* ── Bridge detection ─────────────────────────────────────── */
+const BRIDGE_POLL_MS = 200;
+const BRIDGE_MAX_TRIES = 50; // ~10 s worst case
+let _bridgeTries = 0;
+let _bridgeReady = false;
+
+function _waitForBridge(onReady) {
+  function check() {
+    if (window.pywebview && window.pywebview.api) {
+      _bridgeReady = true;
+      if (onReady) onReady();
+      return;
+    }
+    _bridgeTries++;
+    if (_bridgeTries < BRIDGE_MAX_TRIES) {
+      setTimeout(check, BRIDGE_POLL_MS);
+    } else {
+      // Bridge never appeared — cards still work (preflight/env calls silently no-op)
+      if (onReady) onReady();
+    }
+  }
+  check();
+}
+
+/* ── Wire cards ───────────────────────────────────────────── */
+function init() {
+  _waitForBridge(() => {
+    const cards = document.querySelectorAll('.card');
+    cards.forEach(card => {
+      const name = card.dataset.profile;
+      if (!name) return;
+      card.addEventListener('click', () => selectProfile(name));
+      card.addEventListener('keydown', e => {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); selectProfile(name); }
+      });
+    });
+    const defCard = document.querySelector('.card[data-profile="default"]');
+    if (defCard) selectProfile('default');
+  });
+}
+
+window.addEventListener('DOMContentLoaded', init);
+</script>
+</body>
+</html>

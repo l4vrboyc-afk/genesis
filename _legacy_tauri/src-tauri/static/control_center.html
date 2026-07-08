@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Genesis Control Center</title>
+  <meta name="viewport" content="width=600, initial-scale=1" />
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0f172a;
+      --bg-panel: #1e293b;
+      --bg-card-outer: #334155;
+      --fg: #f8fafc;
+      --fg-muted: #94a3b8;
+      --fg-dim: #64748b;
+      --accent-blue: #3b82f6;
+      --accent-green: #10b981;
+      --accent-green-hover: #059669;
+      --accent-red: #ef4444;
+      --accent-red-hover: #dc2626;
+      --font: "Segoe UI", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: var(--font);
+      background: var(--bg);
+      color: var(--fg);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      padding: 30px;
+      user-select: none;
+    }
+
+    /* ── Header ───────────────────────────────────────────────────── */
+    .header {
+      margin-bottom: 20px;
+    }
+    .header h1 {
+      font-size: 18px;
+      font-weight: bold;
+      letter-spacing: -0.01em;
+      margin-bottom: 2px;
+    }
+    .header p {
+      font-size: 10px;
+      color: var(--fg-dim);
+    }
+
+    /* ── Status Panel ────────────────────────────────────────────── */
+    .status-panel {
+      background: var(--bg-panel);
+      border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 4px;
+      padding: 12px 15px;
+      margin-bottom: 20px;
+      display: flex;
+      gap: 30px;
+      font-size: 10px;
+    }
+    .status-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .status-label {
+      color: var(--fg-muted);
+      font-weight: 500;
+    }
+    .status-value {
+      font-weight: bold;
+      font-size: 11px;
+    }
+    .status-stopped { color: var(--accent-red); }
+    .status-running { color: var(--accent-green); }
+
+    /* ── Profile Cards ───────────────────────────────────────────── */
+    .section-title {
+      font-size: 12px;
+      font-weight: bold;
+      color: var(--fg);
+      margin-bottom: 10px;
+    }
+
+    .profile-card {
+      background: var(--bg-panel);
+      border: 2px solid var(--bg-card-outer);
+      border-radius: 6px;
+      padding: 12px 15px;
+      margin-bottom: 8px;
+      cursor: pointer;
+      transition: border-color 0.15s ease;
+    }
+    .profile-card:hover {
+      border-color: var(--fg-dim);
+    }
+    .profile-card.selected {
+      border-color: var(--accent-blue);
+    }
+    .profile-card.selected .card-title {
+      color: var(--accent-blue);
+    }
+    .card-title {
+      font-size: 12px;
+      font-weight: bold;
+      color: var(--fg);
+      margin-bottom: 4px;
+      transition: color 0.15s ease;
+    }
+    .card-desc {
+      font-size: 10px;
+      color: var(--fg-muted);
+      line-height: 1.4;
+      margin-bottom: 4px;
+    }
+    .card-port {
+      font-size: 10px;
+      color: var(--fg-dim);
+      text-align: right;
+    }
+
+    /* ── Action Buttons ──────────────────────────────────────────── */
+    .btn-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin: 30px 0 10px 0;
+    }
+    .btn {
+      padding: 10px 15px;
+      border: none;
+      border-radius: 4px;
+      font-family: var(--font);
+      font-size: 11px;
+      font-weight: bold;
+      cursor: pointer;
+      transition: background 0.15s ease, opacity 0.15s ease;
+      color: #fff;
+    }
+    .btn:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+    .btn-launch {
+      background: var(--accent-green);
+    }
+    .btn-launch:not(:disabled):hover {
+      background: var(--accent-green-hover);
+    }
+    .btn-stop {
+      background: var(--accent-red);
+    }
+    .btn-stop:not(:disabled):hover {
+      background: var(--accent-red-hover);
+    }
+    .btn-util {
+      background: #334155;
+      color: var(--fg);
+      font-weight: normal;
+      font-size: 10px;
+    }
+    .btn-util:hover {
+      background: #475569;
+    }
+
+    .full-width {
+      grid-column: 1 / -1;
+    }
+
+    /* ── Messages ────────────────────────────────────────────────── */
+    .msg {
+      padding: 10px 12px;
+      border-radius: 4px;
+      font-size: 10px;
+      margin-top: 12px;
+      display: none;
+    }
+    .msg.error {
+      background: rgba(239, 68, 68, 0.15);
+      border: 1px solid rgba(239, 68, 68, 0.25);
+      color: var(--accent-red);
+    }
+    .msg.success {
+      background: rgba(16, 185, 129, 0.15);
+      border: 1px solid rgba(16, 185, 129, 0.25);
+      color: var(--accent-green);
+    }
+    .msg.show { display: block; }
+
+    /* ── Footer ──────────────────────────────────────────────────── */
+    .footer {
+      margin-top: auto;
+      padding-top: 20px;
+      text-align: center;
+      font-size: 10px;
+      color: var(--fg-dim);
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>🚀 GENESIS CONTROL CENTER</h1>
+    <p>Decoupled Multi-Profile Algo-Trading System</p>
+  </div>
+
+  <div class="status-panel">
+    <div class="status-row">
+      <span class="status-label">SYSTEM STATUS:</span>
+      <span id="status-val" class="status-value status-stopped">Stopped</span>
+    </div>
+    <div class="status-row">
+      <span class="status-label">ACTIVE PROFILE:</span>
+      <span id="profile-val" class="status-value" style="color:var(--fg-muted)">None</span>
+    </div>
+  </div>
+
+  <div class="section-title">Select Trading Profile:</div>
+
+  <div id="profiles">
+    <div class="profile-card selected" data-profile="default" data-port="8000">
+      <div class="card-title">Genesis Default (Swing Profile)</div>
+      <div class="card-desc">Market regime-aware trading (H4 filter, M15 entry).<br>Swaps dynamically between Trend-Following &amp; Mean Reversion.</div>
+      <div class="card-port">Dashboard Port: 8000</div>
+    </div>
+    <div class="profile-card" data-profile="scalper" data-port="8001">
+      <div class="card-title">Apex Scalper (M1/M5 Momentum)</div>
+      <div class="card-desc">Hyper-active momentum execution. Disables HTF trend rules.<br>Exploits intraday noise using tight ATR-based risk management.</div>
+      <div class="card-port">Dashboard Port: 8001</div>
+    </div>
+    <div class="profile-card" data-profile="breakout" data-port="8002">
+      <div class="card-title">Session Breakout Sniper (London/NY Opens)</div>
+      <div class="card-desc">Time-locked sniper bot. Maps quiet Asian range and trades<br>institutional breakout volume at London &amp; New York session opens.</div>
+      <div class="card-port">Dashboard Port: 8002</div>
+    </div>
+  </div>
+
+  <div class="btn-row">
+    <button id="btn-launch" class="btn btn-launch">▶️ Launch Bot &amp; Open Dashboard</button>
+    <button id="btn-stop" class="btn btn-stop" disabled>Stop Bot</button>
+    <button id="btn-mt5" class="btn btn-util full-width">📊 Open MetaTrader 5 Terminal</button>
+    <button id="btn-dashboard" class="btn btn-util full-width">📊 Open Dashboard in Browser</button>
+  </div>
+
+  <div id="msg" class="msg"></div>
+
+  <div class="footer">
+    Genesis Trading Bot &middot; Tauri Shell v2.x
+  </div>
+
+  <script>
+    // ── Tauri API wrapper ─────────────────────────────────────────
+    let invoke;
+    if (window.__TAURI__ && window.__TAURI__.core) {
+      invoke = window.__TAURI__.core.invoke;
+    } else {
+      // Fallback for testing outside Tauri
+      invoke = (cmd, args) => { console.log('invoke:', cmd, args); return Promise.resolve(); };
+    }
+
+    // ── State ─────────────────────────────────────────────────────
+    let activeProfile = 'default';
+    let activePort = '8000';
+    let statusPoll = null;
+
+    // ── Elements ──────────────────────────────────────────────────
+    const statusVal = document.getElementById('status-val');
+    const profileVal = document.getElementById('profile-val');
+    const btnLaunch = document.getElementById('btn-launch');
+    const btnStop = document.getElementById('btn-stop');
+    const btnMt5 = document.getElementById('btn-mt5');
+    const btnDashboard = document.getElementById('btn-dashboard');
+    const msgEl = document.getElementById('msg');
+
+    // ── Profile card selection ────────────────────────────────────
+    document.querySelectorAll('.profile-card').forEach(card => {
+      card.addEventListener('click', () => {
+        // Don't switch if bot is running
+        if (statusVal.textContent === 'Running') return;
+        activeProfile = card.dataset.profile;
+        activePort = card.dataset.port;
+        document.querySelectorAll('.profile-card').forEach(c => c.classList.remove('selected'));
+        card.classList.add('selected');
+      });
+    });
+
+    // ── Show message ──────────────────────────────────────────────
+    function showMsg(text, isError) {
+      msgEl.textContent = text;
+      msgEl.className = 'msg show ' + (isError ? 'error' : 'success');
+      setTimeout(() => { msgEl.classList.remove('show'); }, 4000);
+    }
+
+    // ── Launch Bot ────────────────────────────────────────────────
+    btnLaunch.addEventListener('click', async () => {
+      try {
+        await invoke('launch_bot', { profile: activeProfile });
+        statusVal.textContent = 'Running (' + activeProfile.toUpperCase() + ')';
+        statusVal.className = 'status-value status-running';
+        profileVal.textContent = activeProfile.toUpperCase();
+        profileVal.style.color = 'var(--fg)';
+        btnLaunch.disabled = true;
+        btnStop.disabled = false;
+        showMsg('Bot launched successfully', false);
+
+        // Disable profile switching
+        document.querySelectorAll('.profile-card').forEach(c => {
+          if (!c.classList.contains('selected')) c.style.opacity = '0.4';
+        });
+
+        // Open dashboard after short delay
+        setTimeout(() => invoke('open_dashboard', { port: parseInt(activePort) }), 2000);
+      } catch (e) {
+        showMsg('Launch failed: ' + (e.message || e), true);
+      }
+    });
+
+    // ── Stop Bot ──────────────────────────────────────────────────
+    btnStop.addEventListener('click', async () => {
+      try {
+        await invoke('stop_bot');
+        statusVal.textContent = 'Stopped';
+        statusVal.className = 'status-value status-stopped';
+        profileVal.textContent = 'None';
+        profileVal.style.color = 'var(--fg-muted)';
+        btnLaunch.disabled = false;
+        btnStop.disabled = true;
+        showMsg('Bot stopped', false);
+
+        // Re-enable profile switching
+        document.querySelectorAll('.profile-card').forEach(c => c.style.opacity = '1');
+      } catch (e) {
+        showMsg('Stop failed: ' + (e.message || e), true);
+      }
+    });
+
+    // ── Open Dashboard ──────────────────────────────────────────────
+    btnDashboard.addEventListener('click', () => {
+      invoke('open_dashboard', { port: parseInt(activePort) });
+    });
+
+    // ── Open MT5 ──────────────────────────────────────────────────
+    btnMt5.addEventListener('click', async () => {
+      try {
+        await invoke('open_mt5');
+      } catch (e) {
+        // MT5 not found — show a helpful message
+        alert('MetaTrader 5 not found. Please configure the path in your settings (.env or bot/config/settings.py).');
+      }
+    });
+
+    // ── Poll bot status ───────────────────────────────────────────
+    async function pollStatus() {
+      try {
+        const status = await invoke('bot_status');
+        if (status === 'Running') {
+          statusVal.textContent = 'Running (' + activeProfile.toUpperCase() + ')';
+          statusVal.className = 'status-value status-running';
+        } else {
+          // Bot stopped externally or crashed
+          if (btnStop.disabled === false) {
+            statusVal.textContent = 'Stopped';
+            statusVal.className = 'status-value status-stopped';
+            profileVal.textContent = 'None';
+            profileVal.style.color = 'var(--fg-muted)';
+            btnLaunch.disabled = false;
+            btnStop.disabled = true;
+            document.querySelectorAll('.profile-card').forEach(c => c.style.opacity = '1');
+          }
+        }
+      } catch (_) { /* ignore */ }
+    }
+
+    // Start polling once the page and Tauri are ready
+    if (window.__TAURI__) {
+      statusPoll = setInterval(pollStatus, 2000);
+    }
+  </script>
+</body>
+</html>

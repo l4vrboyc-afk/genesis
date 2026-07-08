@@ -1,0 +1,49 @@
+# Genesis runtime requirements (kept as a fallback for users who
+# prefer a flat pip install instead of `pip install -e .`).
+# The canonical install is now `pip install -e .` — see pyproject.toml.
+
+# Cross-platform: pip honours `sys_platform` markers so MetaTrader5
+# is skipped on macOS / Linux automatically. See
+# requirements-mac-linux.txt for the explicit flat fallback.
+
+# MetaTrader 5 (Windows-only wheel — pip marker skips on macOS / Linux).
+# On non-Windows hosts use `pip install -e .` for cross-platform
+# resolution, and read docs/SETUP.md § 2 (Wine / Parallels / VPS).
+MetaTrader5>=5.0.45; sys_platform == "win32"
+
+# Data Processing
+pandas>=2.0.0
+numpy>=1.24.0
+pandas-ta-classic
+
+# Web Dashboard Backend
+fastapi>=0.104.0
+uvicorn>=0.24.0
+python-multipart>=0.0.6
+
+# Discord Bot
+discord.py>=2.3.0
+
+# Database
+sqlalchemy>=2.0.0
+aiosqlite>=0.19.0
+
+# HTTP utilities
+aiohttp>=3.9.0
+
+# Config & Logging
+python-dotenv>=1.0.0
+loguru>=0.7.0
+pydantic>=2.5.0
+pydantic-settings>=2.1.0
+
+# System Tray Launcher (Windows-only; launcher.py short-circuits
+# when not on win32 — see top of launcher.py for the platform guard).
+pystray>=0.19.3; sys_platform == "win32"
+pillow>=10.0.0; sys_platform == "win32"
+
+# ── AI Copilot (optional) ─────────────────────────────────────────
+# Track (c): the Ask-Claude sidebar in the dashboard. Pure optional —
+# the dashboard stays usable when ANTHROPIC_API_KEY is unset; the
+# copilot card simply renders the "Copilot disabled" banner.
+anthropic>=0.40.0; sys_platform != "darwin" or python_version < "3.13"

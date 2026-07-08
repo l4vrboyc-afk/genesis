@@ -1,0 +1,39 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Virtual envs
+.venv/
+venv/
+env/
+ENV/
+
+# Local env files
+.env
+.env.*
+!.env.example
+
+# Logs
+logs/
+*.log
+
+# Local DB
+database/*.db
+database/*.db-wal
+database/*.db-shm
+
+# Claude Code graph cache
+.codegraph/
+
+# IDEs / editors
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini

@@ -1,0 +1,20 @@
+{
+  "identifier": "default",
+  "description": "Default capability set for the dashboard + ask-claude windows",
+  "windows": ["control-center", "dashboard", "ask-claude"],
+  "permissions": [
+    "core:default",
+    "core:window:allow-show",
+    "core:window:allow-hide",
+    "core:window:allow-close",
+    "core:window:allow-set-focus",
+    "core:window:allow-unminimize",
+    "core:webview:allow-create-webview",
+    "core:webview:allow-create-webview-window",
+    "shell:allow-open",
+    "shell:allow-spawn",
+    "shell:allow-execute",
+    "opener:default",
+    "opener:allow-open-url"
+  ]
+}

@@ -1,0 +1,123 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "genesis-trading-bot"
+version = "0.2.0"
+description = "Async MT5 forex trading system with FastAPI dashboard, Discord control, and regime-switching strategies"
+license = { text = "MIT" }
+requires-python = ">=3.10"
+authors = [
+    { name = "Genesis Maintainers" },
+]
+readme = "README.md"
+keywords = ["forex", "mt5", "trading", "asyncio", "fastapi", "discord"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Financial and Insurance Industry",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: Microsoft :: Windows",
+    "Operating System :: POSIX :: Linux",
+    "Operating System :: MacOS",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Office/Business :: Financial :: Investment",
+]
+
+# Cross-platform runtime deps. Per-project conditional markers let the
+# SAME list install cleanly on Windows / macOS / Linux — pip honours
+# `sys_platform` markers in pyproject.toml, so MetaTrader5 (which only
+# ships a Windows wheel) silently skips on Mac/Linux hosts.
+dependencies = [
+    # ── Async / HTTP ──────────────────────────────────────────────
+    "aiohttp>=3.9.0",
+    # ── Config / Logging ─────────────────────────────────────────
+    "loguru>=0.7.0",
+    "pydantic>=2.5.0",
+    "pydantic-settings>=2.1.0",
+    "python-dotenv>=1.0.0",
+    # ── Database ────────────────────────────────────────────────
+    "sqlalchemy>=2.0.0",
+    "aiosqlite>=0.19.0",
+    # ── Data science ─────────────────────────────────────────────
+    "numpy>=1.24.0",
+    "pandas>=2.0.0",
+    "pandas-ta-classic",
+    # ── Web / Discord ────────────────────────────────────────────
+    "fastapi>=0.104.0",
+    "uvicorn>=0.24.0",
+    "discord.py>=2.3.0",
+    "python-multipart>=0.0.6",
+    # ── MT5 (Windows-only wheel) ──────────────────────────────────
+    # On macOS / Linux this line is skipped by pip; the dashboard
+    # still works, but MT5-driven trading requires a Windows host
+    # (see docs/SETUP.md § 2 for Wine / Parallels / VPS options).
+    'MetaTrader5>=5.0.45; sys_platform == "win32"',
+]
+
+[project.optional-dependencies]
+# Dev / lint / type-check stack. Install with `pip install -e .[dev]`.
+dev = [
+    "pytest>=7.4.0",
+    "pytest-asyncio>=0.21.0",
+    "ruff>=0.1.0",
+    "mypy>=1.5.0",
+    "coverage>=7.3.0",
+    "pytest-cov>=4.1.0",
+]
+# Convenience recipe — full project plus the dev tree.
+# Install with `pip install -e .[all]` (PEP 621 chained extras).
+all = ["genesis-trading-bot[dev]"]
+
+[project.urls]
+"Homepage" = "https://github.com/<your-repo>/genesis"
+"Documentation" = "https://github.com/<your-repo>/genesis/blob/main/docs/SETUP.md"
+"Bug Tracker" = "https://github.com/<your-repo>/genesis/issues"
+
+[project.scripts]
+# After `pip install -e .`, `genesis` becomes a system-wide command.
+# Cross-platform — Windows / macOS / Linux all share the same entry
+# because launch.py is itself cross-platform; older users can still
+# run `python main.py` directly if they prefer.
+genesis = "launch:main"
+
+[tool.setuptools]
+packages = [
+    "bot",
+    "bot.config",
+    "bot.core",
+    "bot.risk",
+    "bot.notifications",
+    "bot.strategies",
+    "database",
+    "dashboard",
+    "dashboard.backend",
+    "dashboard.frontend",
+]
+include-package-data = true
+
+[tool.setuptools.package-data]
+# Dashboard's frontend has no build step — ship raw assets alongside
+# the Python module so `dashboard.frontend/index.html` resolves after
+# `pip install`.
+"dashboard.frontend" = ["*.html", "*.css", "*.js"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"]
+ignore = ["E501"]
+
+[tool.mypy]
+python_version = "3.10"
+ignore_missing_imports = true
+warn_unused_ignores = true

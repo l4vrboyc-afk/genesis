@@ -1,0 +1,41 @@
+# ── Genesis runtime for macOS / Linux hosts ─────────────────────────
+# Same as requirements.txt but without MetaTrader5 (no Windows wheel)
+# and pystray / Pillow (launcher.py is Windows-only and is being
+# replaced by a Tauri shell — see Track (b)).
+#
+# Cross-platform note: `pip install -e .` already handles this
+# automatically via the `sys_platform` markers in requirements.txt.
+# This file exists for the rare case where you specifically want a
+# flat install without pip-marker parsing (e.g. on systems where pip
+# markers don't resolve as expected, or for reproducibility in CI).
+#
+# Install the macOS / Linux subset with:
+#     pip install -r requirements-mac-linux.txt
+# …and run with:
+#     python launch.py run
+
+# Data Processing
+pandas>=2.0.0
+numpy>=1.24.0
+pandas-ta-classic
+
+# Web Dashboard Backend
+fastapi>=0.104.0
+uvicorn>=0.24.0
+python-multipart>=0.0.6
+
+# Discord Bot
+discord.py>=2.3.0
+
+# Database
+sqlalchemy>=2.0.0
+aiosqlite>=0.19.0
+
+# HTTP utilities
+aiohttp>=3.9.0
+
+# Config & Logging
+python-dotenv>=1.0.0
+loguru>=0.7.0
+pydantic>=2.5.0
+pydantic-settings>=2.1.0

@@ -1,0 +1,85 @@
+{
+  "productName": "Genesis Shell",
+  "version": "0.1.0",
+  "identifier": "com.genesis.shell",
+  "build": {
+    "beforeDevCommand": "",
+    "beforeBuildCommand": "",
+    "devUrl": "http://127.0.0.1:8000",
+    "frontendDist": "static"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "control-center",
+        "title": "Genesis Control Center",
+        "url": "control_center.html",
+        "width": 600,
+        "height": 800,
+        "minWidth": 540,
+        "minHeight": 700,
+        "resizable": true,
+        "fullscreen": false,
+        "visible": true,
+        "decorations": true,
+        "alwaysOnTop": false,
+        "center": true,
+        "skipTaskbar": false
+      },
+      {
+        "label": "dashboard",
+        "title": "Genesis",
+        "url": "http://127.0.0.1:8000",
+        "width": 1400,
+        "height": 900,
+        "minWidth": 1024,
+        "minHeight": 700,
+        "resizable": true,
+        "fullscreen": false,
+        "visible": false,
+        "decorations": true,
+        "alwaysOnTop": false,
+        "center": true,
+        "skipTaskbar": false
+      },
+      {
+        "label": "ask-claude",
+        "title": "Genesis — Ask Claude",
+        "url": "ask-claude.html",
+        "width": 480,
+        "height": 720,
+        "minWidth": 360,
+        "minHeight": 480,
+        "resizable": true,
+        "fullscreen": false,
+        "visible": false,
+        "decorations": true,
+        "alwaysOnTop": true,
+        "center": true,
+        "skipTaskbar": true
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self' http://127.0.0.1:8000 ws://127.0.0.1:8000; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: http://127.0.0.1:8000; connect-src 'self' http://127.0.0.1:8000 ws://127.0.0.1:8000"
+    },
+    "trayIcon": {
+      "id": "main",
+      "iconPath": "icons/tray-idle.png",
+      "iconAsTemplate": false,
+      "tooltip": "Genesis Trading Bot"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "category": "DeveloperTool",
+    "shortDescription": "Native shell for the Genesis Trading Bot dashboard",
+    "longDescription": "Tauri 2.x desktop wrapper around the local FastAPI dashboard served by `python main.py`.",
+    "targets": ["msi", "nsis"],
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.ico"
+    ]
+  }
+}

@@ -1,0 +1,23 @@
+# ── Genesis dev / test / lint requirements ──────────────────────────
+# Separate from runtime deps so a production `pip install -r
+# requirements.txt` doesn't pull pytest / ruff / mypy.
+#
+# Install via pyproject extras (recommended):
+#     pip install -e .[dev]
+#
+# Or directly with this file:
+#     pip install -r requirements-dev.txt
+
+# ── Test runner ───────────────────────────────────────────────────
+pytest>=7.4.0
+pytest-asyncio>=0.21.0
+
+# ── Coverage ──────────────────────────────────────────────────────
+coverage>=7.3.0
+pytest-cov>=4.1.0
+
+# ── Lint + format ─────────────────────────────────────────────────
+ruff>=0.1.0
+
+# ── Type check ────────────────────────────────────────────────────
+mypy>=1.5.0

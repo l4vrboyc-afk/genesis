@@ -1,0 +1,14 @@
+{
+  "name": "genesis-shell",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Genesis Trading Bot native desktop shell (Tauri 2.x) wrapping the local FastAPI dashboard",
+  "scripts": {
+    "dev": "tauri dev",
+    "build": "tauri build"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.0.0"
+  }
+}
