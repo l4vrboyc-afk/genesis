@@ -29,7 +29,9 @@ def create_app(orchestrator) -> FastAPI:
     # Build CORS origins dynamically so every profile's port is
     # covered.  The browser connects to 127.0.0.1 (the launcher
     # rewrites 0.0.0.0), but may send "localhost" as the Origin
-    # header — include all variants.
+    # header — include all sensible variants. Drop 0.0.0.0 from the
+    # list because browsers never send that as an Origin header and
+    # the entry is dead weight.
     _port = bot_settings.dashboard_port
     app.add_middleware(
         CORSMiddleware,
@@ -37,7 +39,6 @@ def create_app(orchestrator) -> FastAPI:
             f"http://{bot_settings.dashboard_host}:{_port}",
             f"http://localhost:{_port}",
             f"http://127.0.0.1:{_port}",
-            f"http://0.0.0.0:{_port}",
         ],
         allow_credentials=False,
         allow_methods=["*"],

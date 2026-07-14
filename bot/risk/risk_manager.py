@@ -7,7 +7,7 @@ import asyncio
 from collections import deque
 import MetaTrader5 as mt5
 from datetime import datetime, timedelta
-from typing import Optional
+from typing import Any, Optional
 from loguru import logger
 
 from bot.config.settings import settings, TradeDirection
@@ -40,6 +40,65 @@ class RiskManager:
         self._daily_dd_tripped: bool = False
         self._equity_floor_tripped: bool = False
         self._peak_equity: float = 0.0
+
+        # Track (d) MT5 thread-safety — when the orchestrator wires the
+        # AsyncMt5Executor into us, every native ``mt5.*`` call in this
+        # module is rerouted through the executor's single worker thread.
+        # ``None`` here keeps the legacy direct-call path so unit tests
+        # that patch ``bot.risk.risk_manager.mt5.*`` keep working.
+        self._executor: Any = None
+        self._loop: Optional[asyncio.AbstractEventLoop] = None
+
+    # ── Executor Plumbing (Track d) ─────────────────────────────────
+
+    def attach_executor(self, executor, loop) -> None:
+        """Inject the serialised MT5 executor + running loop.
+
+        Called from ``TradingOrchestrator.start`` AFTER
+        ``await executor.start()`` so the queue is alive. With this wiring,
+        every ``mt5.fn(...)`` site in RiskManager hops onto the executor.
+        Without it (test path / pre-attach window) we fall through to the
+        direct call so existing tests keep their patch semantics.
+        """
+        self._executor = executor
+        self._loop = loop
+
+    def _mt5_call(self, func, *args, **kwargs):
+        """Bridge a native ``mt5.X`` call onto the executor thread.
+
+        Behavior:
+            - If an executor + loop are attached AND the caller is off
+              the event loop: push onto the executor's queue and block
+              the calling worker on the result
+              (``asyncio.run_coroutine_threadsafe(...).result()``). The
+              executor's internal ``threading.Lock`` then serializes this
+              call against all other MT5 work in the bot (connector,
+              order_manager, data fetcher).
+            - If the caller IS the event loop thread (e.g. a dashboard
+              route handler calling ``release_equity_floor_trip``):
+              fall through to a direct call — ``future.result()`` would
+              block the loop and prevent the scheduled coroutine from
+              ever running (same-thread deadlock → 15 s TimeoutError).
+            - If executor not attached (tests / cold start): fall through
+              to the direct call so unittest.mock patches remain in
+              effect and we do not deadlock awaiting a not-yet-attached
+              executor.
+        """
+        if self._executor is None or self._loop is None:
+            return func(*args, **kwargs)
+        # Guard against same-thread deadlock when the caller is the event
+        # loop thread itself (e.g. a dashboard control route).
+        try:
+            if asyncio.get_running_loop() is self._loop:
+                return func(*args, **kwargs)
+        except RuntimeError:
+            pass  # No running loop — we are on a worker / main thread, safe
+        future = asyncio.run_coroutine_threadsafe(
+            self._executor.submit(func, *args, **kwargs),
+            self._loop,
+        )
+        return future.result(timeout=15)
+
 
     # ── Position Sizing ─────────────────────────────────────────────
 
@@ -88,8 +147,10 @@ class RiskManager:
             logger.warning("⚠️ SL distance is 0 — cannot calculate position size")
             return 0.0
 
-        # Get symbol info for pip value
-        symbol_info = mt5.symbol_info(signal.symbol)
+        # Get symbol info for pip value — routed through the executor when
+        # attached (production); falls back to direct call when unit tests
+        # have patched ``bot.risk.risk_manager.mt5.symbol_info``.
+        symbol_info = self._mt5_call(mt5.symbol_info, signal.symbol)
         if symbol_info is None:
             logger.error(f"❌ Cannot get symbol info for {signal.symbol}")
             return 0.0
@@ -177,10 +238,10 @@ class RiskManager:
 
         # Check cooldown from losing streak
         if self._cooldown_until and datetime.now() < self._cooldown_until:
-            remaining = (self._cooldown_until - datetime.now()).seconds
+            remaining = (self._cooldown_until - datetime.now()).total_seconds()
             return {
                 "allowed": False,
-                "reason": f"Cooling down after losing streak ({remaining}s remaining)",
+                "reason": f"Cooling down after losing streak ({remaining:.0f}s remaining)",
             }
 
         # Equity-floor pre-check (Track d). _check_equity_floor trips
@@ -256,7 +317,7 @@ class RiskManager:
 
         # Reset daily balance tracking + clear tripped state on a new day
         if self._last_reset_date != today:
-            account = mt5.account_info()
+            account = self._mt5_call(mt5.account_info)
             if account:
                 self._daily_start_balance = account.balance
                 self._last_reset_date = today
@@ -269,7 +330,7 @@ class RiskManager:
         if self._daily_start_balance == 0:
             return True
 
-        account = mt5.account_info()
+        account = self._mt5_call(mt5.account_info)
         if account is None:
             return False  # Can't verify — block trading
 
@@ -302,9 +363,15 @@ class RiskManager:
         if threshold <= 0:
             return True  # setting disabled
 
-        account = mt5.account_info()
+        account = self._mt5_call(mt5.account_info)
         if account is None:
-            return True  # cannot verify — no-op
+            # Track (d) consistency: previously this method returned True
+            # silently on a missing account_info (fail-open) while
+            # _check_daily_drawdown returns False on the same condition
+            # (fail-closed). We now treat both as "cannot verify → block
+            # new entries" so the safety invariants line up. Connectors
+            # recover on the next cycle naturally.
+            return False
 
         equity = account.equity
         if equity > self._peak_equity:
@@ -360,7 +427,7 @@ class RiskManager:
             return False
         logger.warning("🟢 Equity-floor kill switch released (manual)")
         self._equity_floor_tripped = False
-        account = mt5.account_info()
+        account = self._mt5_call(mt5.account_info)
         if account:
             self._peak_equity = account.equity
         return True
@@ -401,7 +468,7 @@ class RiskManager:
 
     def _all_positions(self) -> list:
         """All MT5 positions on the account, or empty list — never None."""
-        positions = mt5.positions_get()
+        positions = self._mt5_call(mt5.positions_get)
         return list(positions) if positions else []
 
     def _our_positions(self) -> list:
@@ -489,7 +556,7 @@ class RiskManager:
         ``kill_switches`` key lets the dashboard / Discord render both
         switches in one block via ``!kill_switch`` or /api/risk.
         """
-        account = mt5.account_info()
+        account = self._mt5_call(mt5.account_info)
         our_positions = self._our_positions()
         daily_dd = 0.0
         equity_floor_dd = 0.0
@@ -502,6 +569,12 @@ class RiskManager:
             "consecutive_losses": self._consecutive_losses,
             "cooldown_active": self._cooldown_until is not None and datetime.now() < self._cooldown_until,
             "cooldown_until": str(self._cooldown_until) if self._cooldown_until else None,
+            "cooldown_remaining_seconds": (
+                max(0.0, (self._cooldown_until - datetime.now()).total_seconds())
+                if self._cooldown_until is not None
+                and datetime.now() < self._cooldown_until
+                else 0.0
+            ),
             "daily_drawdown_pct": round(daily_dd * 100, 2),
             "daily_drawdown_limit": settings.max_daily_drawdown * 100,
             "equity_floor_pct": round(equity_floor_dd * 100, 2),

@@ -114,6 +114,47 @@
             font-weight: 500;
         }
 
+        /* ── Header right cluster (back-to-profiles button + status badge) ─ */
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .header-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.45rem;
+            padding: 0.5rem 0.95rem;
+            border-radius: 9999px;
+            background: rgba(177, 85, 255, 0.08);
+            border: 1px solid rgba(177, 85, 255, 0.3);
+            color: var(--accent-purple);
+            font-family: var(--font-family);
+            font-size: 0.82rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .header-btn:hover {
+            background: rgba(177, 85, 255, 0.18);
+            border-color: rgba(177, 85, 255, 0.55);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(177, 85, 255, 0.25);
+        }
+
+        .header-btn i { font-size: 0.85rem; }
+
+        .header-btn[hidden] { display: none; }
+
+        .header-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            box-shadow: none;
+            transform: none;
+        }
+
         .status-dot {
             width: 8px;
             height: 8px;
@@ -445,9 +486,20 @@
             <span class="logo-tag">Trading Engine</span>
         </div>
         
-        <div id="bot-status" class="bot-status-badge status-paused">
-            <span class="status-dot"></span>
-            <span id="status-label">LOADING</span>
+        <div class="header-right">
+            <!-- Switch Profile: stops the bot and returns the launcher to
+                 the profile picker. Hidden until checkLauncherInfo() confirms
+                 the bot was launched from Genesis.exe (so a bare
+                 `python main.py` run shows no dead button). -->
+            <button id="switch-profile-btn" class="header-btn" type="button" hidden
+                    title="Stop the bot and return to the profile selector">
+                <i class="fa-solid fa-right-left"></i>
+                <span>Switch Profile</span>
+            </button>
+            <div id="bot-status" class="bot-status-badge status-paused">
+                <span class="status-dot"></span>
+                <span id="status-label">LOADING</span>
+            </div>
         </div>
     </header>
 
@@ -598,9 +650,6 @@
                    </button>
                     <button id="close-all-btn" class="btn btn-red">
                         <i class="fa-solid fa-ban"></i> Close All Positions
-                    </button>
-                    <button id="switch-profile-btn" class="btn btn-outline" style="display:none; margin-top: 0.75rem; border-color:rgba(177,85,255,0.3); color:var(--accent-purple);">
-                        <i class="fa-solid fa-right-left"></i> Switch Profile
                     </button>
                 </div>
             </div>
@@ -1014,20 +1063,28 @@
             }
         }
 
-        // Launcher-aware: show "Switch Profile" only when launched from GUI
+        // Launcher-aware: show "Switch Profile" in the header only when
+        // launched from the GUI (so a `python main.py` run without
+        // Genesis.exe shows no dead button — there's no picker to go to).
         function checkLauncherInfo() {
             fetch('/api/launcher-info')
                 .then(r => r.json())
                 .then(data => {
                     if (data.launched_by_gui && data.picker_url) {
                         const btn = document.getElementById('switch-profile-btn');
-                        if (btn) { btn.style.display = 'flex'; }
+                        if (btn) { btn.hidden = false; }
                     }
                 })
                 .catch(() => {});
         }
 
         async function switchProfile() {
+            const btn = document.getElementById('switch-profile-btn');
+            const label = btn ? btn.querySelector('span') : null;
+            // Disable immediately so a double-click can't fire twice; the
+            // backend also stops the bot as part of this action.
+            if (btn) btn.disabled = true;
+            if (label) label.textContent = 'Stopping…';
             try {
                 const res = await fetch('/api/control', {
                     method: 'POST',
@@ -1036,11 +1093,19 @@
                 });
                 const data = await res.json();
                 if (data.status === 'success' && data.picker_url) {
+                    // Bot is shutting down server-side (graceful exit). The
+                    // launcher's monitor reloads the webview on the picker
+                    // when the process exits; navigate here too so a system
+                    // browser tab shows the selector immediately.
                     window.location.href = data.picker_url;
                 } else {
+                    if (btn) btn.disabled = false;
+                    if (label) label.textContent = 'Switch Profile';
                     alert('Switch profile unavailable: ' + (data.message || 'unknown'));
                 }
             } catch (err) {
+                if (btn) btn.disabled = false;
+                if (label) label.textContent = 'Switch Profile';
                 console.error('Switch profile command failed: ', err);
                 alert('Switch profile failed. Ensure the bot was launched from the GUI.');
             }

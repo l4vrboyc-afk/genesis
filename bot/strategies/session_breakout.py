@@ -1,3 +1,4 @@
+import math
 import pandas as pd
 from datetime import datetime, timezone
 from typing import Optional
@@ -43,7 +44,17 @@ class SessionBreakoutStrategy(BaseStrategy):
 
         bid = current_price.get("bid", 0.0)
         ask = current_price.get("ask", 0.0)
-        atr = entry_tf_data.iloc[-1].get("atr", 0.001)
+        # Indicator columns include the configured period suffix
+        # (``atr_{atr_period}``). Reading "atr" never matches, so the loop
+        # used to silently fall back to ATR=0.001 and place orders with
+        # essentially zero SL/TP distance.
+        atr_col = f"atr_{settings.atr_period}"
+        atr = entry_tf_data[atr_col].iloc[-1] if atr_col in entry_tf_data.columns else 0.001
+        try:
+            if atr is None or (isinstance(atr, float) and math.isnan(atr)):
+                atr = 0.001
+        except Exception:
+            atr = 0.001
 
         direction = TradeDirection.HOLD
         confidence = 0.0
@@ -85,9 +96,10 @@ class SessionBreakoutStrategy(BaseStrategy):
             reason=reason,
         )
 
-        risk = abs(entry - sl)
-        reward = abs(tp - entry)
-        signal.risk_reward_ratio = round(reward / risk, 2) if risk > 0 else 0.0
+        # NOTE: ``risk_reward_ratio`` is a derived property on TradeSignal
+        # (read-only). Mutating it raised AttributeError; validate_signal()
+        # already inspects the property from entry/SL/TP, so the
+        # assignment found in earlier drafts is removed here.
 
         if self.validate_signal(signal):
             return signal

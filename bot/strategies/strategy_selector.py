@@ -221,10 +221,18 @@ class StrategySelector:
         # Detect current regime
         regime = self.detect_regime(higher_tf_data)
 
-        # Skip non-tradeable regimes
-        if regime in (MarketRegime.VOLATILE, MarketRegime.DEAD, MarketRegime.NEWS_EVENT):
-            logger.debug(
-                f"⏸️ {symbol} — Regime is {regime.value}, skipping"
+        # Skip non-tradeable regimes — profile-aware
+        # Scalper profile trades VOLATILE (mapped to ScalperMomentumStrategy)
+        # Breakout profile doesn't have VOLATILE mapped
+        # Default profile doesn't have VOLATILE mapped
+        skip_regimes = {MarketRegime.DEAD, MarketRegime.NEWS_EVENT}
+        if self.profile == "scalper":
+            skip_regimes.add(MarketRegime.VOLATILE)  # Scalper handles VOLATILE via its strategy
+        # For other profiles, VOLATILE is not in strategies dict so it falls through to "no strategy" anyway
+
+        if regime in skip_regimes:
+            logger.info(
+                f"⏸️ {symbol} — Regime {regime.value} skipped (profile={self.profile})"
             )
             return None
 

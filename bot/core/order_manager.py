@@ -283,17 +283,20 @@ class OrderManager:
             "direction": "buy" if pos.type == mt5.ORDER_TYPE_BUY else "sell",
             "volume": pos.volume,
             "open_price": pos.price_open,
-            "close_price": price,
-            "profit": pos.profit,
+            "close_price": getattr(result, "price", price),
+            "profit": getattr(result, "profit", pos.profit),
             "comment": comment,
             "time": datetime.now(),
         }
 
-        emoji = "🟢" if pos.profit >= 0 else "🔴"
+        # Use broker-confirmed fill data
+        actual_price = getattr(result, "price", price)
+        actual_profit = getattr(result, "profit", pos.profit)
+        emoji = "🟢" if actual_profit >= 0 else "🔴"
         logger.info(
             f"{emoji} Closed {pos.symbol} | "
-            f"P&L: ${pos.profit:.2f} | "
-            f"Open: {pos.price_open:.5f} → Close: {price:.5f}"
+            f"P&L: ${actual_profit:.2f} | "
+            f"Open: {pos.price_open:.5f} → Close: {actual_price:.5f}"
         )
 
         return close_info

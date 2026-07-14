@@ -184,6 +184,46 @@ class PerformanceTracker:
         trades = self._get_window(window)
         return round(sum(t.get("profit", 0) for t in trades), 2)
 
+    def get_winning_trades_count(self, window: Optional[int] = None) -> int:
+        """Count of winning trades in the window (default: all)."""
+        trades = self._get_window(window)
+        return sum(1 for t in trades if t.get("is_win"))
+
+    def get_losing_trades_count(self, window: Optional[int] = None) -> int:
+        """Count of losing trades in the window (default: all).
+
+        Breakeven trades (profit == 0) are excluded from both win and loss
+        counts so win_rate + win_count + loss_count == total_trades remains
+        a useful invariant for dashboard rendering.
+        """
+        trades = self._get_window(window)
+        return sum(
+            1 for t in trades
+            if not t.get("is_win") and t.get("profit", 0) < 0
+        )
+
+    def get_average_win(self, window: Optional[int] = None) -> float:
+        """Average profit among winning trades in the window."""
+        wins = [t["profit"] for t in self._get_window(window) if t.get("is_win") and t.get("profit", 0) > 0]
+        if not wins:
+            return 0.0
+        return round(sum(wins) / len(wins), 2)
+
+    def get_average_loss(self, window: Optional[int] = None) -> float:
+        """Average (negative) loss among losing trades in the window.
+
+        Returns 0.0 when no losing trades recorded — distinguishing from
+        an actual ``0`` loss via the loser's count is the consumer's job.
+        """
+        losses = [
+            t["profit"]
+            for t in self._get_window(window)
+            if not t.get("is_win") and t.get("profit", 0) < 0
+        ]
+        if not losses:
+            return 0.0
+        return round(sum(losses) / len(losses), 2)
+
     def get_max_drawdown(self) -> float:
         """Get the maximum drawdown percentage recorded."""
         return round(self._max_drawdown, 2)
@@ -232,16 +272,33 @@ class PerformanceTracker:
     # ── Full Summary ────────────────────────────────────────────────
 
     def get_summary(self) -> dict:
-        """Get complete performance summary."""
+        """Get complete performance summary.
+
+        The keys exposed here are the source-of-truth for the dashboard's
+        /api/performance Pydantic schema (``PerformanceSummaryResponse``).
+        ``winning_trades`` / ``losing_trades`` / ``avg_win`` / ``avg_loss``
+        were previously absent and caused Pydantic to raise
+        ``ValidationError`` (which FastAPI surfaces as **500 Internal
+        Server Error**) on the first GET. The schema also wants
+        ``avg_rr`` (snake-named alias of our canonical ``average_rr``),
+        so we expose both names.
+        """
         window = settings.performance_window
         return {
+            # Required by /api/performance schema
             "total_trades": len(self._trades),
+            "winning_trades": self.get_winning_trades_count(window),
+            "losing_trades": self.get_losing_trades_count(window),
             "win_rate": self.get_win_rate(window),
-            "profit_factor": self.get_profit_factor(window),
-            "average_rr": self.get_average_rr(window),
             "total_pnl": self.get_total_pnl(),
-            "rolling_pnl": self.get_total_pnl(window),
+            "avg_rr": self.get_average_rr(window),
+            "avg_win": self.get_average_win(window),
+            "avg_loss": self.get_average_loss(window),
+            "profit_factor": self.get_profit_factor(window),
             "max_drawdown": self.get_max_drawdown(),
+            # Convenience keys the dashboard + strategy_breakdown views use
+            "average_rr": self.get_average_rr(window),
+            "rolling_pnl": self.get_total_pnl(window),
             "streak": self.get_streak(),
             "strategy_breakdown": self.get_strategy_breakdown(),
             "daily_pnl": dict(list(self._daily_pnl.items())[-7:]),  # Last 7 days

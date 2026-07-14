@@ -204,6 +204,8 @@ class DataFetcher:
             ema_slope         — Linear-regression slope of ema_{period} over
                                 `EMA_SLOPE_WINDOW` bars (price-units per bar;
                                 positive = rising EMA, negative = falling).
+            volume_avg_20     — 20-bar mean of bar tick-volume (the scalper
+                                uses this for its 1.5× surge confirmation).
 
         Args:
             df: DataFrame with OHLCV data
@@ -250,6 +252,16 @@ class DataFetcher:
         # for why we use a fitted slope instead of a two-point diff.
         ema_col = f"ema_{settings.ema_period}"
         df["ema_slope"] = self._rolling_slope(df[ema_col], window=self.EMA_SLOPE_WINDOW)
+
+        # Volume baseline for the scalper's tick-volume confirmation gate.
+        # The scalper compares the latest bar's tick count against this
+        # 20-bar mean and only fires when volume surges past ``1.5×``
+        # baseline — the "no-trade-in-thin-book" filter the strategy
+        # description originally promised but the v1 RSI-only
+        # implementation skipped. ``min_periods=1`` lets the first 20
+        # bars still produce a value; rolling NaNs in the trailing window
+        # are treated by the scalper as "no signal".
+        df["volume_avg_20"] = df["volume"].rolling(window=20, min_periods=1).mean()
 
         return df
 

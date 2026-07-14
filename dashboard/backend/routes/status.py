@@ -1,6 +1,8 @@
 """Status route — GET /api/status."""
 from __future__ import annotations
 
+from typing import Any
+
 from fastapi import APIRouter
 from loguru import logger
 

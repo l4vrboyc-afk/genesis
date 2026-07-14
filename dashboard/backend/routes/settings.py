@@ -1,7 +1,7 @@
 """Settings route — GET /api/settings, POST /api/settings."""
 from __future__ import annotations
 
-from typing import List, Optional
+from typing import Any, List, Optional
 
 from fastapi import APIRouter
 from loguru import logger

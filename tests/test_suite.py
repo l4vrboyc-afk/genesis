@@ -78,6 +78,23 @@ class TestRiskManager(unittest.TestCase):
 
     def setUp(self):
         self.risk_manager = RiskManager(None)
+        # Reset per-day state so _check_daily_drawdown returns True on a
+        # healthy mocked account, and pre-populate _daily_start_balance +
+        # _peak_equity so equity-floor and daily-DD paths don't trigger on
+        # missing-stats grounds (fail-closed). Without these two lines the
+        # tests below got rejected on the equity-floor path before reaching
+        # the R:R check they actually exercise.
+        self.risk_manager._daily_start_balance = 100000.0
+        self.risk_manager._peak_equity = 100000.0
+        self.risk_manager._last_reset_date = datetime.now().date()
+        self._mt5_patcher = patch(
+            "bot.risk.risk_manager.mt5.account_info",
+            return_value=MagicMock(spec=["equity", "balance"], equity=100000.0, balance=100000.0),
+        )
+        self._mt5_patcher.start()
+
+    def tearDown(self):
+        self._mt5_patcher.stop()
 
     def test_minimum_rr_limit(self):
         # Create a trade signal with bad risk-to-reward (1:1 instead of 1:2)
@@ -186,10 +203,15 @@ class TestRiskDailyDrawdown(unittest.TestCase):
 
     def test_can_trade_blocks_when_tripped(self):
         self.rm._daily_dd_tripped = True
+        # NOTE: TradeSignal.risk_reward_ratio is a computed @property and is
+        # NOT a constructor kwarg. The earlier ``risk_reward_ratio=2.0``
+        # signature raised TypeError because there is no such field.
+        # With entry=1.1000, sl=1.0950, tp=1.1100 the property computes to
+        # exactly 2.0 — no kwarg needed.
         signal = TradeSignal(
             direction=TradeDirection.BUY, symbol="EURUSD",
             entry_price=1.1000, stop_loss=1.0950, take_profit=1.1100,
-            strategy_name="Test", risk_reward_ratio=2.0,
+            strategy_name="Test",
         )
         with patch("bot.risk.risk_manager.mt5.positions_get", return_value=[]):
             check = self.rm._can_trade_sync(signal)
@@ -321,10 +343,15 @@ class TestRiskCorrelation(unittest.TestCase):
 
     @staticmethod
     def _signal(symbol, direction):
+        # risk_reward_ratio is a derived property (RR = |tp-entry| / |entry-sl|).
+        # entry=1.1000, sl=1.0950, tp=1.1100 → reward/risk = 100/50 = 2.0.
+        # Tests previously passed ``risk_reward_ratio=2.0`` to TradeSignal(...),
+        # but that kwarg does not exist on the dataclass; the property is
+        # computed from entry/SL/TP automatically.
         return TradeSignal(
             direction=direction, symbol=symbol,
             entry_price=1.1000, stop_loss=1.0950, take_profit=1.1100,
-            strategy_name="Test", risk_reward_ratio=2.0,
+            strategy_name="Test",
         )
 
 

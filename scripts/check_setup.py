@@ -59,13 +59,17 @@ for stream_name in ("stdout", "stderr"):
 #    the import is safe. ──────────────────────────────────────────────
 try:
     from dotenv import load_dotenv
-    _env_file = ROOT / ".env"
+    # Profile-aware merge: inherit base .env, then overlay the profile
+    # file so a non-default profile inherits keys (esp. MT5 creds) from
+    # .env and overrides only what it specializes (port, db, strategy
+    # params). Mirrors main.py / settings.py and the documented "falls
+    # back to .env for any key not present here" contract in .env.<profile>.
     _profile = os.environ.get("GENESIS_PROFILE")
+    load_dotenv(dotenv_path=ROOT / ".env", override=False)
     if _profile:
-        _env_file = ROOT / f".env.{_profile.lower()}"
-        if not _env_file.exists():
-            _env_file = ROOT / ".env"
-    load_dotenv(dotenv_path=_env_file, override=False)
+        _pf = ROOT / f".env.{_profile.lower()}"
+        if _pf.exists():
+            load_dotenv(dotenv_path=_pf, override=True)
 except ImportError:  # pragma: no cover — dotenv is in requirements.txt
     pass
 

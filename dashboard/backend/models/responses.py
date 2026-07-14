@@ -170,6 +170,14 @@ class ControlResponse(BaseModel):
         default=None,
         description="True when a kill-switch engagement latch was cleared",
     )
+    picker_url: Optional[str] = Field(
+        default=None,
+        description=(
+            "Returned only for the switch_profile action: the GUI profile "
+            "picker URL to navigate to. The backend stops the bot so the "
+            "launcher's monitor then reloads the webview on the picker."
+        ),
+    )
 
 
 class ControlRequest(BaseModel):

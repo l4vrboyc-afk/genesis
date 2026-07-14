@@ -1,6 +1,10 @@
 """Control route — POST /api/control."""
 from __future__ import annotations
 
+import asyncio
+import os
+from typing import Any
+
 from fastapi import APIRouter
 from loguru import logger
 
@@ -8,6 +12,69 @@ from ..models.responses import ControlRequest, ControlResponse
 
 router = APIRouter()
 _app_store: Any = None
+
+
+async def _request_shutdown(app: Any, delay: float = 0.4) -> None:
+    """Trigger the bot's normal graceful-exit path so the launcher's
+    monitor detects the process exit and reloads the webview on the
+    profile picker.
+
+    main.py runs all services under ``asyncio.gather`` — uvicorn, the
+    orchestrator's start() task, and (optionally) Discord. For the
+    process to exit so the launcher can return to the picker, every
+    gathered task must complete:
+
+      * uvicorn      — set ``should_exit`` so serve() returns.
+      * discord      — close the client so start() returns (when enabled).
+      * orchestrator — cancel the start() task if the user clicked before
+        startup finished (e.g. stuck in MT5 connect); otherwise gather()
+        would block forever.
+
+    The canonical orchestrator teardown (loop cancel + MT5 disconnect +
+    executor stop) runs in main.py's ``finally`` block once gather()
+    returns — this helper only unblocks gather(). If a blocking MT5
+    call then keeps the process alive past the watchdog deadline,
+    ``_shutdown_watchdog`` force-exits so the user is never stuck.
+    A short delay lets the HTTP response flush to the client.
+    Any error is swallowed so a fire-and-forget task can never surface
+    as a bridge error.
+    """
+    try:
+        await asyncio.sleep(delay)
+        uv = getattr(app.state, "uvicorn_server", None)
+        if uv is not None:
+            uv.should_exit = True
+        try:
+            bot = getattr(app.state, "discord_bot", None)
+            if bot is not None and hasattr(bot, "is_closed") and not bot.is_closed():
+                await asyncio.wait_for(bot.close(), timeout=3.0)
+        except asyncio.TimeoutError:
+            logger.warning("discord.close() timed out during switch_profile — continuing")
+        except Exception as exc:
+            logger.error(f"discord.close() during switch_profile failed: {exc}")
+        t = getattr(app.state, "orchestrator_task", None)
+        if t is not None and not t.done():
+            t.cancel()
+    except Exception as exc:  # never raise out of a fire-and-forget task
+        logger.error(f"switch_profile shutdown task failed: {exc}")
+
+
+async def _shutdown_watchdog(timeout: float = 8.0) -> None:
+    """Force-exit the process if graceful shutdown hasn't completed.
+
+    On a clean exit the event loop (and this sleep) is cancelled as the
+    process winds down, so the watchdog is a no-op. It only fires when a
+    blocking MT5 C call — typically a mid-flight ``connect()`` that
+    ``orchestrator.stop()`` then waits on inside main.py's finally —
+    keeps the loop alive past the deadline, so the user is never stuck
+    waiting to return to the profile picker.
+    """
+    try:
+        await asyncio.sleep(timeout)
+    except asyncio.CancelledError:
+        return
+    logger.warning("switch_profile: graceful shutdown timed out — forcing process exit")
+    os._exit(0)
 
 
 @router.post(
@@ -85,19 +152,26 @@ async def bot_control(req: ControlRequest):
             }
 
         elif action == "switch_profile":
-            import os as _os
-            picker = _os.environ.get("GENESIS_PICKER_URL")
+            picker = os.environ.get("GENESIS_PICKER_URL")
             if not picker:
                 raise HTTPException(
                     status_code=503,
                     detail="Not launched from GUI — no picker available",
                 )
             await notification_manager.notify_alert(
-                "🔄 Switching profile via Web Dashboard", "system"
+                "🔄 Switching profile via Web Dashboard — bot stopping", "system"
             )
+            # Stop the bot so the launcher's monitor detects the process
+            # exit and reloads the webview on the profile picker. The
+            # response (with picker_url) is returned first; the shutdown
+            # runs after a short delay so it flushes to the client. The
+            # watchdog force-exits only if a blocking MT5 call keeps the
+            # process alive past its deadline.
+            asyncio.create_task(_request_shutdown(_app_store))
+            asyncio.create_task(_shutdown_watchdog())
             return {
                 "status": "success",
-                "message": "Switch profile — navigate to picker",
+                "message": "Bot stopping — returning to profile selector",
                 "picker_url": picker,
             }
 

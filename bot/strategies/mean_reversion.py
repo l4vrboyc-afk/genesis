@@ -38,10 +38,21 @@ class MeanReversionStrategy(BaseStrategy):
         self._description = "Range-bound trading — buy support, sell resistance"
         self._suitable_regimes = [MarketRegime.RANGING]
         self._proximity_threshold = 0.001  # 0.1% proximity to S/R level
-        # Stateless S/R reuse — connector=None is fine here because
-        # `DataFetcher.get_support_resistance` only inspects the provided
-        # DataFrame and never reaches for MT5.
-        self._fetcher = DataFetcher(None)
+        # Stateless S/R reuse — ``get_support_resistance`` is a pure
+        # DataFrame transform and never reaches for MT5, so connector=None
+        # is safe. The instance is lazily resolved so we don't keep a
+        # permanent half-wired reference and we avoid a brittle ``None``
+        # pre-allocation that future contributors will trip over.
+        self._fetcher = None
+
+    @property
+    def _sr_fetcher(self):
+        if self._fetcher is None:
+            # Local import keeps the strategy import-cost flat for the
+            # other strategies that don't need the fetcher at all.
+            from bot.core.data_fetcher import DataFetcher
+            self._fetcher = DataFetcher(None)
+        return self._fetcher
 
     def generate_signal(
         self,
@@ -60,7 +71,7 @@ class MeanReversionStrategy(BaseStrategy):
             return None
 
         # ── Step 2: Find S/R levels (delegated to DataFetcher) ──────
-        sr_levels = self._fetcher.get_support_resistance(entry_tf_data)
+        sr_levels = self._sr_fetcher.get_support_resistance(entry_tf_data)
 
         if not sr_levels["support"] or not sr_levels["resistance"]:
             return None

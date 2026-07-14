@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Any
 
 from fastapi import APIRouter
 from loguru import logger
@@ -23,7 +24,7 @@ async def get_news():
         filter_obj = orch.news_filter
         if (
             filter_obj._last_refresh is None
-            or (datetime.now() - filter_obj._last_refresh).seconds
+            or (datetime.now() - filter_obj._last_refresh).total_seconds()
             > settings.news_calendar_refresh_interval
         ):
             await filter_obj.refresh_calendar_async()

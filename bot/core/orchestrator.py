@@ -360,8 +360,19 @@ class TradingOrchestrator:
                 # 4. Log daily stats
                 await self._record_daily_stats()
 
-            except Exception as e:
-                logger.error(f"❌ Error in main loop cycle: {e}")
+            except BaseException as e:
+                # Capture full traceback to stderr immediately
+                import sys, traceback
+                print(f"\n{'='*60}", file=sys.stderr)
+                print(f"[ORCHESTRATOR CRASH] {type(e).__name__}: {e}", file=sys.stderr)
+                traceback.print_exc(file=sys.stderr)
+                print(f"{'='*60}\n", file=sys.stderr)
+
+                # Also try logger
+                try:
+                    logger.error(f"❌ Error in main loop cycle: {e}")
+                except Exception:
+                    pass
 
             # Sleep remaining time
             elapsed = (datetime.now() - start_time).total_seconds()
@@ -628,9 +639,17 @@ class TradingOrchestrator:
                 adx = latest.get("adx", 0)
                 rsi = etf_data[f"rsi_{settings.rsi_period}"].iloc[-1]
                 atr_ratio = etf_data["atr_ratio"].iloc[-1]
+
+                # Also log entry TF RSI for scalper (M1)
+                entry_rsi = etf_data[f"rsi_{settings.rsi_period}"].iloc[-1]
+                entry_volume = etf_data["volume"].iloc[-1] if "volume" in etf_data.columns else 0
+                entry_vol_avg = etf_data["volume_avg_20"].iloc[-1] if "volume_avg_20" in etf_data.columns else 0
+                vol_ratio = entry_volume / entry_vol_avg if entry_vol_avg > 0 else 0
+
                 logger.info(
                     f"🔍 {pair} — regime={regime.value if regime else 'unknown'} | "
-                    f"ADX={adx:.1f} RSI={rsi:.1f} ATR_ratio={atr_ratio:.2f} | "
+                    f"HTF_ADX={adx:.1f} HTF_ATRratio={atr_ratio:.2f} | "
+                    f"ETF_RSI={entry_rsi:.1f} ETF_vol={vol_ratio:.1f}×avg | "
                     f"No signal this cycle"
                 )
                 continue

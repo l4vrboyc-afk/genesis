@@ -26,6 +26,15 @@ class NewsFilter:
         self._last_refresh = None
         self._no_trade_pairs = set()  # Currently blocked pairs
 
+        # Track (d) — Injected by ``TradingOrchestrator.start``. When set,
+        # ``refresh_calendar_async`` hops the (potentially-heavy)
+        # ``mt5.calendar_value_history`` call onto the executor's single
+        # worker thread, so the news read path joins the rest of the bot
+        # under the AsyncMt5Executor serialization contract. ``None`` is
+        # fine for the unit-test / pre-attach window — it keeps the legacy
+        # ``asyncio.to_thread`` path.
+        self._executor = None
+
         # Currency mapping for pairs
         self._pair_currencies = {
             "EURUSD": ["EUR", "USD"],
@@ -80,14 +89,27 @@ class NewsFilter:
         self._last_refresh = datetime.now()
         logger.info("📅 Using recurring event schedule as fallback")
 
+    def attach_executor(self, executor) -> None:
+        """Inject the serialised MT5 executor (see ``RiskManager.attach_executor``)."""
+        self._executor = executor
+
     async def refresh_calendar_async(self) -> None:
         """Async wrapper — runs the synchronous MT5 calendar call on a worker thread.
 
         `can_trade` (sync) is fine on the hot path because `refresh_calendar` is
         internally throttled to once per `news_calendar_refresh_interval` (default
         3600 s). Async callers should prefer this wrapper for cleanliness.
+
+        When an AsyncMt5Executor is attached (production), the native
+        ``mt5.calendar_value_history`` call is queued onto that executor
+        so the news refresh joins the rest of the bot under one
+        serialization lock. Otherwise we fall back to ``asyncio.to_thread``
+        so unit tests + cold-start paths keep working.
         """
-        await asyncio.to_thread(self.refresh_calendar)
+        if self._executor is not None:
+            await self._executor.submit(self.refresh_calendar)
+        else:
+            await asyncio.to_thread(self.refresh_calendar)
 
     def _parse_mt5_events(self, raw_events) -> List[dict]:
         """Parse MT5 calendar events, keeping only high-impact ones."""
@@ -205,9 +227,14 @@ class NewsFilter:
                 age_s = (datetime.now() - self._last_refresh).total_seconds()
             if (age_s is None or age_s > 2 * settings.news_calendar_refresh_interval) \
                     and not self._cached_events:
+                # Guard against ``None`` before formatting — the very first
+                # cycle at bot start has no last_refresh and used to raise
+                # TypeError here, silently defeating the fail-closed
+                # path the operator enabled.
+                age_str = "unknown" if age_s is None else f"{age_s:.0f}"
                 logger.warning(
                     f"📰 News-filter fail-closed: cache is empty and no refresh "
-                    f"in {age_s:.0f}s (> {2 * settings.news_calendar_refresh_interval}s)."
+                    f"in {age_str}s (> {2 * settings.news_calendar_refresh_interval}s)."
                 )
                 return {
                     "allowed": False,
