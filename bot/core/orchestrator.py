@@ -11,9 +11,9 @@ import threading
 from datetime import datetime, timedelta
 import MetaTrader5 as mt5
 from loguru import logger
-from typing import List, Optional
+from typing import List
 
-from bot.config.settings import settings, MarketRegime, TradeDirection
+from bot.config.settings import settings, TradeDirection
 from bot.core.mt5_connector import MT5Connector
 from bot.core.data_fetcher import DataFetcher
 from bot.core.order_manager import OrderManager
@@ -23,6 +23,7 @@ from bot.risk.performance_tracker import PerformanceTracker
 from bot.strategies.strategy_selector import StrategySelector
 from bot.notifications.notification_manager import notification_manager
 from database.db_manager import DatabaseManager
+from bot.core.data_logger import start_tick_logger, enqueue_tick
 
 
 # ── Module-level helpers (used by AsyncMt5Executor callers) ─────────────
@@ -40,6 +41,8 @@ def _raw_positions_to_dicts(positions_raw):
             "volume": pos.volume,
             "open_price": pos.price_open,
             "current_price": pos.price_current,
+            "entry_price": pos.price_open,
+            "live_price": pos.price_current,
             "sl": pos.sl,
             "tp": pos.tp,
             "profit": pos.profit,
@@ -149,7 +152,7 @@ class AsyncMt5Executor:
         if self._thread and self._thread.is_alive():
             self._thread.join(timeout=5)
             if self._thread.is_alive():
-                logger.warning("⚠️ Mt5Executor thread did not stop within 5 s")
+                logger.warning("[WARN] Mt5Executor thread did not stop within 5 s")
         logger.debug("Mt5Executor stopped")
 
 
@@ -212,6 +215,7 @@ class TradingOrchestrator:
 
         # 1. Initialize DB
         await self.db.init_db()
+        await start_tick_logger()
 
         # 1b. Hydrate in-memory state from persistent storage so win-rate /
         # drawdown / daily-pnl reflect full history on the very first cycle
@@ -224,13 +228,13 @@ class TradingOrchestrator:
         except Exception as e:
             # Hydration is best-effort — a corrupted historical row must NOT
             # prevent the bot from starting.
-            logger.warning(f"⚠️ PerformanceTracker hydration skipped: {e}")
+            logger.warning(f"[WARN] PerformanceTracker hydration skipped: {e}")
 
         await self._load_persisted_state()
 
         # 2. Connect to MetaTrader 5 (async — runs on the executor's worker thread)
         if not await self.mt5_conn.connect():
-            logger.error("❌ Failed to connect to MetaTrader 5 during startup")
+            logger.error("[ERR] Failed to connect to MetaTrader 5 during startup")
             # We don't raise error, let it run and attempt reconnection in background
 
         # 3. Synchronize open positions from MT5 database
@@ -243,7 +247,7 @@ class TradingOrchestrator:
         self._running = True
         self._paused = False
         self._loop_task = asyncio.create_task(self._main_loop())
-        logger.success("🟢 Genesis Trading Orchestrator is running")
+        logger.success("[GREEN] Genesis Trading Orchestrator is running")
 
     async def stop(self):
         """Stop trading loop and disconnect from MT5.
@@ -267,12 +271,12 @@ class TradingOrchestrator:
         try:
             await self.mt5_conn.disconnect()
         except Exception as e:
-            logger.error(f"❌ MT5 disconnect failed (will still stop executor): {e}")
+            logger.error(f"[ERR] MT5 disconnect failed (will still stop executor): {e}")
 
         try:
             await self._mt5.stop()
         except Exception as e:
-            logger.warning(f"⚠️ MT5 executor stop failed: {e}")
+            logger.warning(f"[WARN] MT5 executor stop failed: {e}")
 
         logger.success("🏁 Trading Orchestrator stopped gracefully")
 
@@ -327,12 +331,36 @@ class TradingOrchestrator:
             "paper_trading": settings.paper_trading,
         }
 
+    async def get_live_open_trades(self) -> list[dict]:
+        """Fetch live open positions from MT5 with real-time prices.
+
+        Returns the same dict shape as ``_raw_positions_to_dicts`` so the
+        dashboard modal can read ``live_price`` and ``profit`` directly.
+        Falls back to the database when MT5 is unreachable.
+        """
+        try:
+            positions_raw = await self._mt5.submit(
+                mt5.positions_get, magic=settings.magic_number
+            )
+            if positions_raw:
+                return _raw_positions_to_dicts(positions_raw)
+            # MT5 returned nothing — might be zero open positions
+            return []
+        except Exception as e:
+            logger.warning(f"⚠ Could not fetch live positions from MT5: {e}")
+            # Fallback: serve from DB (no live_price, but dashboard won't crash)
+            try:
+                db_trades = await self.db.get_open_trades()
+                return [t.to_dict() for t in db_trades]
+            except Exception:
+                return []
+
     # ── Orchestrator Core Loops ─────────────────────────────────────
 
     async def _main_loop(self):
         """Asynchronous execution loop running every N seconds."""
         loop_interval = 15  # seconds
-        logger.info(f"🔁 Main loop started. Interval: {loop_interval}s")
+        logger.info(f"[LOOP] Main loop started. Interval: {loop_interval}s")
 
         while self._running:
             start_time = datetime.now()
@@ -362,7 +390,8 @@ class TradingOrchestrator:
 
             except BaseException as e:
                 # Capture full traceback to stderr immediately
-                import sys, traceback
+                import sys
+                import traceback
                 print(f"\n{'='*60}", file=sys.stderr)
                 print(f"[ORCHESTRATOR CRASH] {type(e).__name__}: {e}", file=sys.stderr)
                 traceback.print_exc(file=sys.stderr)
@@ -370,7 +399,7 @@ class TradingOrchestrator:
 
                 # Also try logger
                 try:
-                    logger.error(f"❌ Error in main loop cycle: {e}")
+                    logger.error(f"[ERR] Error in main loop cycle: {e}")
                 except Exception:
                     pass
 
@@ -401,7 +430,7 @@ class TradingOrchestrator:
             logger.warning("📡 MT5 connection lost — entering reconnect loop")
             try:
                 await notification_manager.notify_alert(
-                    "⚠️ MT5 connection lost — orchestrator attempting reconnect",
+                    "[WARN] MT5 connection lost — orchestrator attempting reconnect",
                     "warning",
                 )
             except Exception as e:  # pragma: no cover — best-effort
@@ -415,14 +444,14 @@ class TradingOrchestrator:
         # Not connected — attempt reconnect. The connector itself has
         # exponential backoff and a max-retry ceiling (returns False on
         # give-up).
-        logger.warning("⚠️ MT5 disconnected. Reconnecting...")
+        logger.warning("[WARN] MT5 disconnected. Reconnecting...")
         ok = await self.mt5_conn.reconnect()
 
         if ok:
-            logger.success("🟢 MT5 reconnected — running post-reconnect reconciliation")
+            logger.success("[GREEN] MT5 reconnected — running post-reconnect reconciliation")
             try:
                 await notification_manager.notify_alert(
-                    "🟢 MT5 reconnected — running post-reconnect reconciliation",
+                    "[GREEN] MT5 reconnected — running post-reconnect reconciliation",
                     "system",
                 )
             except Exception as e:  # pragma: no cover — best-effort
@@ -463,7 +492,7 @@ class TradingOrchestrator:
             )
             active_count = len(active_raw) if active_raw else 0
             await self._sync_open_positions()
-            logger.info("✅ Post-reconnect reconciliation completed")
+            logger.info("[OK] Post-reconnect reconciliation completed")
             try:
                 await notification_manager.notify_alert(
                     f"🔄 Post-reconnect reconciliation completed "
@@ -473,7 +502,7 @@ class TradingOrchestrator:
             except Exception as e:  # pragma: no cover
                 logger.debug(f"notify_alert failed (reconcile): {e}")
         except Exception as e:
-            logger.warning(f"⚠️ Post-reconnect reconciliation failed: {e}")
+            logger.warning(f"[WARN] Post-reconnect reconciliation failed: {e}")
 
     async def _fire_kill_switch(self, reason: str) -> None:
         """Engage an emergency flatten (Track d).
@@ -491,11 +520,11 @@ class TradingOrchestrator:
 
         self._kill_switch_fired = True
         self._paused = True
-        logger.critical(f"🚨 Kill switch engaged: {reason}")
+        logger.critical(f"[ALERT] Kill switch engaged: {reason}")
 
         try:
             await notification_manager.notify_alert(
-                f"🚨 Kill switch engaged: {reason}",
+                f"[ALERT] Kill switch engaged: {reason}",
                 "critical",
             )
         except Exception as e:  # pragma: no cover
@@ -514,10 +543,10 @@ class TradingOrchestrator:
             except Exception as e:  # pragma: no cover
                 logger.debug(f"notify_alert failed (kill closed notify): {e}")
         except Exception as e:
-            logger.error(f"❌ Kill-switch emergency close failed: {e}")
+            logger.error(f"[ERR] Kill-switch emergency close failed: {e}")
             try:
                 await notification_manager.notify_alert(
-                    f"❌ Kill switch flat FAILED: {e} — manual intervention required",
+                    f"[ERR] Kill switch flat FAILED: {e} — manual intervention required",
                     "critical",
                 )
             except Exception:
@@ -534,7 +563,7 @@ class TradingOrchestrator:
         """
         if not self._kill_switch_fired:
             return False
-        logger.warning("🟢 Kill-switch engagement latch cleared (manual release)")
+        logger.warning("[GREEN] Kill-switch engagement latch cleared (manual release)")
         self._kill_switch_fired = False
         return True
 
@@ -623,8 +652,16 @@ class TradingOrchestrator:
                 self.fetcher.get_current_price(pair),
             )
 
+            await enqueue_tick({
+                "symbol": pair,
+                "timestamp": int(current_price["time"].timestamp()),
+                "bid": current_price["bid"],
+                "ask": current_price["ask"],
+                "volume": current_price.get("volume", 0),
+            })
+
             if htf_data is None or etf_data is None or current_price is None:
-                logger.warning(f"⚠️ {pair}: No data returned (HTF={htf_data is not None}, ETF={etf_data is not None}, price={current_price is not None})")
+                logger.warning(f"[WARN] {pair}: No data returned (HTF={htf_data is not None}, ETF={etf_data is not None}, price={current_price is not None})")
                 continue
 
             # Check strategy signal
@@ -637,7 +674,6 @@ class TradingOrchestrator:
                 # Log WHY no signal fired — helps diagnose why bot isn't trading
                 latest = htf_data.iloc[-1]
                 adx = latest.get("adx", 0)
-                rsi = etf_data[f"rsi_{settings.rsi_period}"].iloc[-1]
                 atr_ratio = etf_data["atr_ratio"].iloc[-1]
 
                 # Also log entry TF RSI for scalper (M1)
@@ -647,7 +683,7 @@ class TradingOrchestrator:
                 vol_ratio = entry_volume / entry_vol_avg if entry_vol_avg > 0 else 0
 
                 logger.info(
-                    f"🔍 {pair} — regime={regime.value if regime else 'unknown'} | "
+                    f"[SIGNAL] {pair} — regime={regime.value if regime else 'unknown'} | "
                     f"HTF_ADX={adx:.1f} HTF_ATRratio={atr_ratio:.2f} | "
                     f"ETF_RSI={entry_rsi:.1f} ETF_vol={vol_ratio:.1f}×avg | "
                     f"No signal this cycle"
@@ -719,7 +755,6 @@ class TradingOrchestrator:
                 comment=trade_result["comment"],
             )
 
-            from bot.notifications.notification_manager import notification_manager
             await notification_manager.notify_trade_open({
                 "ticket": trade_result["ticket"],
                 "symbol": signal.symbol,
@@ -780,7 +815,7 @@ class TradingOrchestrator:
 
             if deals:
                 for deal in deals:
-                    if deal.entry == mt5.DEAL_entry_OUT:
+                    if deal.entry == mt5.DEAL_ENTRY_OUT:
                         exit_price = deal.price
                         profit += deal.profit
                         swap += deal.swap
@@ -808,7 +843,6 @@ class TradingOrchestrator:
 
         # Outside the lock — Discord notify (network IO, no MT5 access)
         for trade, exit_price, profit, swap, comment in closed_trades:
-            from bot.notifications.notification_manager import notification_manager
             await notification_manager.notify_trade_close({
                 "ticket": trade.ticket,
                 "symbol": trade.symbol,
@@ -853,7 +887,7 @@ class TradingOrchestrator:
                     except Exception as e:
                         # One bad close shouldn't kill the rest of the flatten
                         logger.error(
-                            f"❌ Failed to close position {pos.ticket}: {e}"
+                            f"[ERR] Failed to close position {pos.ticket}: {e}"
                         )
 
         await self._check_closed_positions()
@@ -883,7 +917,7 @@ class TradingOrchestrator:
             if trade.ticket in active_tickets:
                 continue
             logger.info(
-                f"⚠️ Sync: Ticket {trade.ticket} was closed while bot "
+                f"[WARN] Sync: Ticket {trade.ticket} was closed while bot "
                 f"was offline. Logging closure."
             )
             history_from = datetime.now() - timedelta(days=7)
@@ -920,7 +954,7 @@ class TradingOrchestrator:
         for pos in active_positions:
             if pos["ticket"] not in db_open_tickets:
                 logger.info(
-                    f"⚠️ Sync: Active ticket {pos['ticket']} is missing from "
+                    f"[WARN] Sync: Active ticket {pos['ticket']} is missing from "
                     f"database. Re-logging."
                 )
                 await self.db.record_trade_open(
@@ -936,7 +970,7 @@ class TradingOrchestrator:
                     comment=pos["comment"] or "Recovered position",
                 )
 
-        logger.success("✅ Position synchronization completed")
+        logger.success("[OK] Position synchronization completed")
 
     async def _record_daily_stats(self):
         """Save today's performance stats to DB and update max-drawdown tracker.
@@ -975,18 +1009,23 @@ class TradingOrchestrator:
         
         # Load settings overrides
         risk = await self.db.get_state("max_risk_per_trade")
-        if risk: settings.max_risk_per_trade = float(risk)
+        if risk:
+            settings.max_risk_per_trade = float(risk)
             
         dd = await self.db.get_state("max_daily_drawdown")
-        if dd: settings.max_daily_drawdown = float(dd)
+        if dd:
+            settings.max_daily_drawdown = float(dd)
             
         max_pos = await self.db.get_state("max_open_positions")
-        if max_pos: settings.max_open_positions = int(max_pos)
+        if max_pos:
+            settings.max_open_positions = int(max_pos)
             
         pairs = await self.db.get_state("trading_pairs")
-        if pairs: settings.trading_pairs = [p.strip() for p in pairs.split(",") if p.strip()]
+        if pairs:
+            settings.trading_pairs = [p.strip() for p in pairs.split(",") if p.strip()]
             
         paper = await self.db.get_state("paper_trading")
-        if paper: settings.paper_trading = paper == "1"
+        if paper:
+            settings.paper_trading = paper == "1"
             
         logger.info("⚙️ Persisted configuration settings applied successfully")

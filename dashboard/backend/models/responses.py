@@ -198,6 +198,8 @@ class SettingsResponse(BaseModel):
     max_risk_per_trade: float
     max_daily_drawdown: float
     max_open_positions: int
+    lot_sizing_mode: str
+    fixed_lot_size: float
     trading_pairs: List[str]
     paper_trading: bool
     bot_name: str
@@ -210,6 +212,8 @@ class SettingsUpdateRequest(BaseModel):
     max_risk_per_trade: Optional[float] = None
     max_daily_drawdown: Optional[float] = None
     max_open_positions: Optional[int] = None
+    lot_sizing_mode: Optional[str] = None
+    fixed_lot_size: Optional[float] = None
     trading_pairs: Optional[List[str]] = None
     paper_trading: Optional[bool] = None
 

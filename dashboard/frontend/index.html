@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -52,6 +52,92 @@
             display: flex;
             flex-direction: column;
             overflow-x: hidden;
+        }
+
+        /* ── Modals ─────────────────────────────────────────────────── */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(4px);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+        }
+        .modal-content {
+            background: var(--panel-bg);
+            border: 1px solid var(--panel-border);
+            border-radius: 12px;
+            padding: 2rem;
+            width: 90%;
+            max-width: 500px;
+            position: relative;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+            color: var(--text-primary);
+        }
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+            border-bottom: 1px solid var(--panel-border);
+            padding-bottom: 1rem;
+        }
+        .modal-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: var(--accent-cyan);
+        }
+        .modal-close {
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            font-size: 1.5rem;
+            cursor: pointer;
+            transition: color 0.2s;
+        }
+        .modal-close:hover {
+            color: var(--text-primary);
+        }
+        .modal-body {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+        .modal-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.5rem 0;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+        }
+        .modal-label {
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+        }
+        .modal-value {
+            font-weight: 600;
+        }
+        .likelihood-bar-container {
+            width: 100%;
+            height: 8px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 4px;
+            overflow: hidden;
+            margin-top: 0.25rem;
+        }
+        .likelihood-bar {
+            height: 100%;
+            transition: width 0.3s ease;
+        }
+        /* Make table rows clickable */
+        tbody tr.clickable-row {
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        tbody tr.clickable-row:hover {
+            background: rgba(255,255,255,0.05);
         }
 
         /* ── Header Layout ────────────────────────────────────────────── */
@@ -688,8 +774,19 @@
                 </h2>
                 <form id="settings-form" onsubmit="saveSettings(event)">
                     <div class="form-group">
+                        <label>Position Sizing Mode</label>
+                        <select id="set-sizing-mode" class="form-input" onchange="toggleSizingMode()">
+                            <option value="DYNAMIC">Dynamic (Risk %)</option>
+                            <option value="FIXED">Fixed Lot Size</option>
+                        </select>
+                    </div>
+                    <div class="form-group" id="risk-group">
                         <label>Max Risk Per Trade (%)</label>
                         <input type="number" step="0.1" id="set-risk" class="form-input">
+                    </div>
+                    <div class="form-group" id="fixed-lot-group" style="display: none;">
+                        <label>Fixed Lot Size</label>
+                        <input type="number" step="0.01" id="set-fixed-lot" class="form-input">
                     </div>
                     <div class="form-group">
                         <label>Max Daily Drawdown (%)</label>
@@ -710,7 +807,7 @@
             </div>
 
             <!-- News Filter Card -->
-            <div class="card">
+            <div class="card" style="margin-bottom: 1.5rem;">
                 <h2 class="card-title" style="margin-bottom: 1rem">
                     <i class="fa-solid fa-newspaper" style="color: var(--accent-cyan)"></i>
                     Economic Calendar
@@ -718,6 +815,8 @@
                 <div id="news-list">
                     <div style="text-align: center; color: var(--text-secondary); font-size: 0.8rem">No upcoming high impact news</div>
                 </div>
+            </div>
+
             <!-- Ask Claude copilot -->
             <div class="card" id="copilot-card">
                 <h2 class="card-title" style="margin-bottom: 1rem">
@@ -757,7 +856,197 @@
         GENESIS Trading Bot &copy; 2026. Made with vanilla HTML5 / CSS3 / ES6.
     </footer>
 
+    <!-- Active Trade Modal -->
+    <div id="active-trade-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div class="modal-title"><i class="fa-solid fa-chart-line"></i> Position <span id="modal-active-ticket"></span></div>
+                <button class="modal-close" onclick="closeActiveTradeModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="modal-row">
+                    <span class="modal-label">Symbol / Type</span>
+                    <span class="modal-value" id="modal-active-symbol"></span>
+                </div>
+                <div class="modal-row">
+                    <span class="modal-label">Entry Price</span>
+                    <span class="modal-value" id="modal-active-entry"></span>
+                </div>
+                <div class="modal-row">
+                    <span class="modal-label">Current Price</span>
+                    <span class="modal-value" id="modal-active-current"></span>
+                </div>
+                <div class="modal-row">
+                    <span class="modal-label">Current Profit</span>
+                    <span class="modal-value" id="modal-active-profit" style="font-size: 1.25rem;"></span>
+                </div>
+                <div class="modal-row">
+                    <span class="modal-label">Distance from Entry (est.)</span>
+                    <span class="modal-value" id="modal-active-pips"></span>
+                </div>
+                <div class="modal-row" style="flex-direction: column; align-items: flex-start; border-bottom: none;">
+                    <div style="display: flex; justify-content: space-between; width: 100%;">
+                        <span class="modal-label">Likelihood of Profit</span>
+                        <span class="modal-value" id="modal-active-likelihood"></span>
+                    </div>
+                    <div class="likelihood-bar-container">
+                        <div id="modal-active-likelihood-bar" class="likelihood-bar"></div>
+                    </div>
+                </div>
+                <div style="margin-top: 1rem;">
+                    <button id="btn-close-active-trade" class="btn btn-red" style="width: 100%;"><i class="fa-solid fa-xmark"></i> Close Trade Now</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- History Trade Modal -->
+    <div id="history-trade-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div class="modal-title"><i class="fa-solid fa-clock-rotate-left"></i> Trade <span id="modal-history-ticket"></span></div>
+                <button class="modal-close" onclick="closeHistoryTradeModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="modal-row">
+                    <span class="modal-label">What Happened</span>
+                    <span class="modal-value" id="modal-history-summary"></span>
+                </div>
+                <div class="modal-row">
+                    <span class="modal-label">Strategy</span>
+                    <span class="modal-value" id="modal-history-strategy"></span>
+                </div>
+                <div class="modal-row">
+                    <span class="modal-label">Market Regime</span>
+                    <span class="modal-value" id="modal-history-regime"></span>
+                </div>
+                <div class="modal-row">
+                    <span class="modal-label">Reasoning / Notes</span>
+                    <span class="modal-value" id="modal-history-reasoning" style="font-size: 0.85rem; max-width: 60%; text-align: right; color: var(--text-secondary);"></span>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script>
+        // --- Modal Logic ---
+        function openActiveTradeModal(tradeStr) {
+            const t = JSON.parse(decodeURIComponent(tradeStr));
+            document.getElementById('active-trade-modal').style.display = 'flex';
+            document.getElementById('modal-active-ticket').innerText = '#' + t.ticket;
+            document.getElementById('modal-active-symbol').innerHTML = `<strong>${t.symbol}</strong> <span class="badge ${t.direction === 'buy' ? 'badge-buy' : 'badge-sell'}">${t.direction.toUpperCase()}</span>`;
+            // Entry and current prices (handle both DB and live MT5 field names)
+            const entryPrice = t.entry_price ?? t.open_price;
+            if (entryPrice != null) {
+                document.getElementById('modal-active-entry').innerText = Number(entryPrice).toFixed(5);
+            } else {
+                document.getElementById('modal-active-entry').innerText = '—';
+            }
+            const currentPrice = t.live_price ?? t.current_price;
+            if (currentPrice != null) {
+                document.getElementById('modal-active-current').innerText = Number(currentPrice).toFixed(5);
+            } else {
+                document.getElementById('modal-active-current').innerText = '—';
+            }
+            
+            const profitVal = t.profit ?? 0;
+            const profitEl = document.getElementById('modal-active-profit');
+            profitEl.innerText = `$${Number(profitVal).toFixed(2)}`;
+            profitEl.className = 'modal-value ' + (profitVal >= 0 ? 'color-win' : 'color-loss');
+
+            // Estimate distance from entry (pips/points proxy)
+            let distText = "In Profit";
+            let likelihood = 50;
+            
+            if (t.tp && t.sl && entryPrice && currentPrice) {
+                // Use actual current price for precise distance calculation
+                const totalRange = Math.abs(t.tp - t.sl);
+                const distFromSL = Math.abs(currentPrice - t.sl);
+                
+                if (totalRange > 0) {
+                    // Likelihood = how close we are to TP vs SL (0%=at SL, 100%=at TP)
+                    likelihood = (distFromSL / totalRange) * 100;
+                    likelihood = Math.max(1, Math.min(99, likelihood));
+                }
+                
+                if (profitVal > 0) {
+                    distText = `<span class="color-win">Moving towards TP</span>`;
+                } else if (profitVal < 0) {
+                    distText = `<span class="color-loss">Approaching SL</span>`;
+                }
+            } else if (t.tp && t.sl && entryPrice) {
+                // Fallback: estimate from profit when live price unavailable
+                const totalRiskRange = Math.abs(entryPrice - t.sl);
+                const totalRewardRange = Math.abs(t.tp - entryPrice);
+                if (profitVal > 0 && totalRewardRange > 0) {
+                    likelihood = 50 + Math.min(49, (profitVal / (t.volume * 100)) * 50);
+                    distText = `<span class="color-win">Moving towards TP</span>`;
+                } else if (profitVal < 0 && totalRiskRange > 0) {
+                    likelihood = 50 - Math.min(49, (Math.abs(profitVal) / (t.volume * 100)) * 50);
+                    distText = `<span class="color-loss">Approaching SL</span>`;
+                }
+            } else {
+                likelihood = profitVal >= 0 ? 75 : 25;
+            }
+            
+            likelihood = Math.max(1, Math.min(99, likelihood)); // clamp 1-99%
+            
+            document.getElementById('modal-active-pips').innerHTML = distText;
+            document.getElementById('modal-active-likelihood').innerText = `${likelihood.toFixed(0)}%`;
+            
+            const bar = document.getElementById('modal-active-likelihood-bar');
+            bar.style.width = `${likelihood}%`;
+            bar.style.backgroundColor = likelihood >= 50 ? 'var(--accent-green)' : 'var(--accent-red)';
+            
+            const btn = document.getElementById('btn-close-active-trade');
+            btn.onclick = () => closeActivePositionBtn(t.ticket);
+        }
+
+        function closeActiveTradeModal() {
+            document.getElementById('active-trade-modal').style.display = 'none';
+        }
+
+        async function closeActivePositionBtn(ticket) {
+            if (!confirm(`Are you sure you want to manually close position #${ticket}?`)) return;
+            try {
+                const res = await fetch(`/api/trades/${ticket}/close`, { method: 'POST' });
+                const data = await res.json();
+                if (res.ok) {
+                    closeActiveTradeModal();
+                    fetchDashboardData();
+                } else {
+                    alert("Failed to close trade: " + (data.detail || "Unknown error"));
+                }
+            } catch (e) {
+                alert("Error closing trade: " + e);
+            }
+        }
+
+        function openHistoryTradeModal(tradeStr) {
+            const t = JSON.parse(decodeURIComponent(tradeStr));
+            document.getElementById('history-trade-modal').style.display = 'flex';
+            document.getElementById('modal-history-ticket').innerText = '#' + t.ticket;
+            
+            let summary = `Traded <strong>${t.symbol}</strong> (${t.direction.toUpperCase()}). `;
+            if (t.profit > 0) {
+                summary += `<span class="color-win">Closed in profit (+$${t.profit.toFixed(2)})</span>`;
+            } else if (t.profit < 0) {
+                summary += `<span class="color-loss">Closed in loss (-$${Math.abs(t.profit).toFixed(2)})</span>`;
+            } else {
+                summary += `Closed at breakeven.`;
+            }
+            
+            document.getElementById('modal-history-summary').innerHTML = summary;
+            document.getElementById('modal-history-strategy').innerText = t.strategy || "Manual/Unknown";
+            document.getElementById('modal-history-regime').innerText = (t.market_regime || "Unknown").toUpperCase();
+            document.getElementById('modal-history-reasoning').innerText = t.close_comment || t.comment || "No detailed reasoning recorded.";
+        }
+
+        function closeHistoryTradeModal() {
+            document.getElementById('history-trade-modal').style.display = 'none';
+        }
+        // -----------------------
+
         let chart = null;
 
         // Initialize Chart
@@ -853,7 +1142,7 @@
             // Stat values
             document.getElementById('balance-val').innerText = `$${data.balance.toFixed(2)}`;
             document.getElementById('equity-val').innerText = `$${data.equity.toFixed(2)}`;
-            
+
             const pnlVal = document.getElementById('pnl-val');
             pnlVal.innerText = `$${data.daily_pnl.toFixed(2)}`;
             if (data.daily_pnl >= 0) {
@@ -866,23 +1155,29 @@
 
             // Update Active Positions table
             const activeBody = document.getElementById('active-positions-body');
+
             if (!data.open_trades || data.open_trades.length === 0) {
                 activeBody.innerHTML = '<tr><td colspan="8" style="text-align: center; color: var(--text-secondary)">No active positions</td></tr>';
             } else {
-                activeBody.innerHTML = data.open_trades.map(p => `
-                    <tr>
-                        <td><code>${p.ticket}</code></td>
-                        <td><strong>${p.symbol}</strong></td>
-                        <td><span class="badge ${p.direction === 'buy' ? 'badge-buy' : 'badge-sell'}">${p.direction}</span></td>
-                        <td><code>${p.volume.toFixed(2)}</code></td>
-                        <td>${p.entry_price.toFixed(5)}</td>
-                        <td>${p.exit_price ? p.exit_price.toFixed(5) : '-'}</td>
-                        <td style="font-size: 0.8rem; color: var(--text-secondary)">SL: ${p.sl.toFixed(5)}<br>TP: ${p.tp.toFixed(5)}</td>
-                        <td class="${p.profit >= 0 ? 'color-win' : 'color-loss'}" style="font-weight: 600">
-                            $${p.profit.toFixed(2)}
-                        </td>
-                    </tr>
-                `).join('');
+                activeBody.innerHTML = data.open_trades.map(t => {
+                    const profit = t.profit ?? 0;
+                    const livePrice = t.live_price ?? t.current_price ?? '—';
+                    const strData = encodeURIComponent(JSON.stringify(t));
+                    return `
+                        <tr class="clickable-row" onclick="openActiveTradeModal('${strData}')">
+                            <td><code>${t.ticket}</code></td>
+                            <td><strong>${t.symbol}</strong></td>
+                            <td><span class="badge ${t.direction === 'buy' ? 'badge-buy' : 'badge-sell'}">${t.direction.toUpperCase()}</span></td>
+                            <td><code>${t.volume.toFixed(2)}</code></td>
+                            <td>${(t.entry_price ?? t.open_price) != null ? Number(t.entry_price ?? t.open_price).toFixed(5) : '—'}</td>
+                            <td>${typeof livePrice === 'number' ? livePrice.toFixed(5) : livePrice}</td>
+                            <td>${t.sl != null ? t.sl.toFixed(5) : '—'} / ${t.tp != null ? t.tp.toFixed(5) : '—'}</td>
+                            <td class="${profit >= 0 ? 'color-win' : 'color-loss'}" style="font-weight:600">
+                                ${profit >= 0 ? '+' : ''}$${profit.toFixed(2)}
+                            </td>
+                        </tr>
+                    `;
+                }).join('');
             }
         }
 
@@ -912,8 +1207,9 @@
             } else {
                 body.innerHTML = trades.map(t => {
                     const time = new Date(t.open_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                    const strData = encodeURIComponent(JSON.stringify(t));
                     return `
-                        <tr>
+                        <tr class="clickable-row" onclick="openHistoryTradeModal('${strData}')">
                             <td style="color: var(--text-secondary)">${time}</td>
                             <td><code>${t.ticket}</code></td>
                             <td><strong>${t.symbol}</strong></td>
@@ -1021,16 +1317,31 @@
             }
         }
 
+        function toggleSizingMode() {
+            const mode = document.getElementById('set-sizing-mode').value;
+            if (mode === 'FIXED') {
+                document.getElementById('risk-group').style.display = 'none';
+                document.getElementById('fixed-lot-group').style.display = 'block';
+            } else {
+                document.getElementById('risk-group').style.display = 'block';
+                document.getElementById('fixed-lot-group').style.display = 'none';
+            }
+        }
+
         // Settings config loading & saving
         async function loadSettings() {
             try {
                 const res = await fetch('/api/settings');
                 const data = await res.json();
                 
+                document.getElementById('set-sizing-mode').value = data.lot_sizing_mode || 'DYNAMIC';
                 document.getElementById('set-risk').value = data.max_risk_per_trade * 100;
+                document.getElementById('set-fixed-lot').value = data.fixed_lot_size || 0.01;
                 document.getElementById('set-drawdown').value = data.max_daily_drawdown * 100;
                 document.getElementById('set-max-positions').value = data.max_open_positions;
                 document.getElementById('set-pairs').value = data.trading_pairs.join(', ');
+                
+                toggleSizingMode();
             } catch (err) {
                 console.error("Failed to load settings: ", err);
             }
@@ -1039,7 +1350,9 @@
         async function saveSettings(e) {
             e.preventDefault();
             const payload = {
+                lot_sizing_mode: document.getElementById('set-sizing-mode').value,
                 max_risk_per_trade: parseFloat(document.getElementById('set-risk').value) / 100,
+                fixed_lot_size: parseFloat(document.getElementById('set-fixed-lot').value),
                 max_daily_drawdown: parseFloat(document.getElementById('set-drawdown').value) / 100,
                 max_open_positions: parseInt(document.getElementById('set-max-positions').value),
                 trading_pairs: document.getElementById('set-pairs').value.split(',').map(s => s.trim().toUpperCase()).filter(s => s.length > 0)
@@ -1125,7 +1438,7 @@
             fetchDashboardData();
             pollTimer = setInterval(() => {
                 if (!document.hidden) fetchDashboardData();
-            }, 3000);
+            }, 250);
         }
 
         function stopPolling() {

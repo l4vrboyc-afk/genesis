@@ -18,9 +18,9 @@ from bot.strategies.strategy_selector import StrategySelector
 _profile = (settings.active_profile or "default").lower()
 
 if _profile == "scalper":
-    from bot.strategies.scalper_momentum import ScalperMomentumStrategy
+    from bot.strategies.scalper_momentum import ScalperMomentumStrategy  # noqa: F401
 elif _profile == "breakout":
-    from bot.strategies.session_breakout import SessionBreakoutStrategy
+    from bot.strategies.session_breakout import SessionBreakoutStrategy  # noqa: F401
 
 __all__ = [
     "BaseStrategy", "TradeSignal",

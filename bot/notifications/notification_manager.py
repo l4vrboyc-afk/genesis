@@ -5,7 +5,6 @@ Uses an asyncio.Queue to decouple trade execution from API requests.
 
 import asyncio
 from datetime import datetime
-from typing import Optional
 from loguru import logger
 
 

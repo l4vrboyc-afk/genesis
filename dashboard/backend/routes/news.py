@@ -29,12 +29,15 @@ async def get_news():
         ):
             await filter_obj.refresh_calendar_async()
 
-        events = filter_obj.get_upcoming_events(hours=24)
+        events = filter_obj.get_upcoming_events(hours=168)
         formatted_events = []
         for e in events:
             e_copy = dict(e)
             if "time" in e_copy and hasattr(e_copy["time"], "isoformat"):
                 e_copy["time"] = e_copy["time"].isoformat()
+            # Provide both 'name' (canonical) and 'event_name' (backward compat)
+            if "name" in e_copy and "event_name" not in e_copy:
+                e_copy["event_name"] = e_copy["name"]
             formatted_events.append(e_copy)
         return {"events": formatted_events}
     except Exception as e:

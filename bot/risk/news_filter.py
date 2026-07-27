@@ -57,9 +57,9 @@ class NewsFilter:
         try:
             import MetaTrader5 as mt5
 
-            # Fetch events for the next 24 hours
+            # Fetch events for the next 7 days (168 hours)
             now = datetime.now()
-            future = now + timedelta(hours=24)
+            future = now + timedelta(hours=168)
 
             # MT5 calendar function (available in MT5 build 2755+)
             events = mt5.calendar_value_history(
@@ -172,8 +172,8 @@ class NewsFilter:
 
         events = []
         seen_keys = set()
-        # Generate events for today and tomorrow
-        for day_offset in range(2):
+        # Generate events for the next 7 days
+        for day_offset in range(7):
             check_date = (now + timedelta(days=day_offset)).date()
             wd = check_date.weekday()
             for name, ccy, hh, mm, expected_wd, day_fn in templates:
@@ -188,7 +188,7 @@ class NewsFilter:
                 if key in seen_keys:
                     continue
                 seen_keys.add(key)
-                if now <= event_dt <= now + timedelta(hours=24):
+                if now <= event_dt <= now + timedelta(hours=168):
                     events.append({
                         "name": name,
                         "currency": ccy,

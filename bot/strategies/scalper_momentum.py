@@ -24,10 +24,11 @@ surge gate that v1 promised but never read:
         AND  previous bar's RSI < 44
 
   CONFIDENCE GATE — both directions require:
-    • tick volume on the latest bar >= 1.5× the 20-bar mean
-      (MT5 reports tick-volume; ``volume_avg_20`` is precomputed by
-      ``DataFetcher.calculate_indicators`` so this is a single
-      arithmetic comparison)
+    • tick volume on the latest bar >= ``settings.volume_surge_ratio`` ×
+      the 20-bar mean (default 1.5×; tunable via VOLUME_SURGE_RATIO in
+      .env.<profile>). MT5 reports tick-volume and ``volume_avg_20`` is
+      precomputed by ``DataFetcher.calculate_indicators``, so this is a
+      single arithmetic comparison
     • Confidence score: 0.65 for a crossover (reversal), 0.55 for
       a zone-with-slope (continuation). ``MIN_CONFIDENCE`` defaults
       to 0.45 in ``.env.scalper`` so both pass validation; the
@@ -67,12 +68,24 @@ _SELL_ZONE_LOW = 35.0
 _SELL_ZONE_HIGH = 42.0
 # _SELL_ZONE_PREV_MAX = 44.0         # REMOVED: prev RSI < 44 no longer required (relaxed)
 
-_VOLUME_SURGE_RATIO = 1.5           # require latest bar volume >= 1.5× the 20-bar mean
+# _VOLUME_SURGE_RATIO now lives in settings.volume_surge_ratio (default
+# 1.5, overridable via VOLUME_SURGE_RATIO in .env.<profile>) so the gate
+# can be tuned without editing source.
 _SLOPE_LOOKBACK = 3                  # compare latest RSI to RSI 3 bars earlier
 
 # Two confidence tiers — crossover (reversal) edges out zone (continuation).
 _CONFIDENCE_CROSSOVER = 0.65
 _CONFIDENCE_ZONE = 0.55
+
+# Minimum SL buffer (in pips) to avoid instant stop-outs from noise/spread
+MIN_SL_PIPS = 8.0
+
+# Coarse pre-filter — reject bars where ATR is too small relative to
+# price to produce a tradeable stop distance. 0.03% of price catches
+# genuinely dead markets (0.1-pip bars on majors, 1-tick bars on JPY)
+# without touching normal M1 action.  The risk manager's Guard 1
+# (tick_size × 50 ticks) provides the authoritative per-symbol floor.
+MIN_RELATIVE_ATR = 0.00003  # Enforces minimum 0.003% price movement in ATR
 
 
 class ScalperMomentumStrategy(BaseStrategy):
@@ -105,6 +118,7 @@ class ScalperMomentumStrategy(BaseStrategy):
             "HOLD": 0,
             "VOLUME_REJECT": 0,
             "NAN_REJECT": 0,
+            "LOW_ATR_REJECT": 0,
         }
         self._SUMMARY_INTERVAL = 100  # log summary every N evaluations
 
@@ -152,8 +166,17 @@ class ScalperMomentumStrategy(BaseStrategy):
                 logger.info(f"📉 {symbol} — NaN indicator (RSI={rsi}, prev={prev_rsi}, 3ago={rsi_3ago}, ATR={atr}, vol={volume}, vol_avg={volume_avg})")
                 return None
 
+        # Low-ATR gate — reject bars where volatility is too compressed
+        # to produce a meaningful stop-loss distance.  Symbol-agnostic:
+        # divides ATR by current ask price, no tick_size/MT5 dependency.
+        price = current_price.get("ask", 0.0)
+        if price > 0 and (atr / price) < MIN_RELATIVE_ATR:
+            self._signal_counts["LOW_ATR_REJECT"] += 1
+            logger.info(f"📉 {symbol} — ATR too low relative to price. Skipping signal.")
+            return None
+
         # Volume-surge gate — the bar we're reading must be at least
-        # ``_VOLUME_SURGE_RATIO`` of the 20-bar tick-volume mean.
+        # ``settings.volume_surge_ratio`` × the 20-bar tick-volume mean.
         # volume_avg <= 0 covers the edge cases where MT5 reports 0
         # for an inactive session (we don't want to divide by zero).
         if volume_avg <= 0:
@@ -161,9 +184,9 @@ class ScalperMomentumStrategy(BaseStrategy):
             logger.info(f"📉 {symbol} — volume_avg=0 (inactive session)")
             return None
         volume_ratio = volume / volume_avg
-        if volume_ratio < _VOLUME_SURGE_RATIO:
+        if volume_ratio < settings.volume_surge_ratio:
             self._signal_counts["VOLUME_REJECT"] += 1
-            logger.info(f"📉 {symbol} — volume surge FAIL: {volume_ratio:.1f}×avg (< {_VOLUME_SURGE_RATIO}×)")
+            logger.info(f"📉 {symbol} — volume surge FAIL: {volume_ratio:.1f}×avg (< {settings.volume_surge_ratio}×)")
             return None
 
         # ── Direction detection ────────────────────────────────────
@@ -201,12 +224,18 @@ class ScalperMomentumStrategy(BaseStrategy):
         signal_type = "HOLD"
         signal_details = ""
 
+        # ── Calculate SL / TP Distances ────────────────────────────
+        pip_value = 0.01 if "JPY" in symbol else 0.0001
+        calculated_sl_distance = atr * settings.atr_sl_multiplier
+        sl_distance = max(calculated_sl_distance, MIN_SL_PIPS * pip_value)
+        tp_distance = atr * settings.atr_tp_multiplier
+
         if crossover_up:
             direction = TradeDirection.BUY
             confidence = _CONFIDENCE_CROSSOVER
             entry = ask
-            sl = entry - (atr * settings.atr_sl_multiplier)
-            tp = entry + (atr * settings.atr_tp_multiplier)
+            sl = entry - sl_distance
+            tp = entry + tp_distance
             signal_type = "CROSSOVER"
             signal_details = (
                 f"RSI cross>{_BUY_CROSSOVER_THRESHOLD:.0f} "
@@ -218,8 +247,8 @@ class ScalperMomentumStrategy(BaseStrategy):
             direction = TradeDirection.BUY
             confidence = _CONFIDENCE_ZONE
             entry = ask
-            sl = entry - (atr * settings.atr_sl_multiplier)
-            tp = entry + (atr * settings.atr_tp_multiplier)
+            sl = entry - sl_distance
+            tp = entry + tp_distance
             signal_type = "ZONE_WITH_SLOPE"
             signal_details = (
                 f"RSI zone {_BUY_ZONE_LOW:.0f}-{_BUY_ZONE_HIGH:.0f} "
@@ -231,8 +260,8 @@ class ScalperMomentumStrategy(BaseStrategy):
             direction = TradeDirection.SELL
             confidence = _CONFIDENCE_CROSSOVER
             entry = bid
-            sl = entry + (atr * settings.atr_sl_multiplier)
-            tp = entry - (atr * settings.atr_tp_multiplier)
+            sl = entry + sl_distance
+            tp = entry - tp_distance
             signal_type = "CROSSOVER"
             signal_details = (
                 f"RSI cross<{_SELL_CROSSOVER_THRESHOLD:.0f} "
@@ -244,8 +273,8 @@ class ScalperMomentumStrategy(BaseStrategy):
             direction = TradeDirection.SELL
             confidence = _CONFIDENCE_ZONE
             entry = bid
-            sl = entry + (atr * settings.atr_sl_multiplier)
-            tp = entry - (atr * settings.atr_tp_multiplier)
+            sl = entry + sl_distance
+            tp = entry - tp_distance
             signal_type = "ZONE_WITH_SLOPE"
             signal_details = (
                 f"RSI zone {_SELL_ZONE_LOW:.0f}-{_SELL_ZONE_HIGH:.0f} "

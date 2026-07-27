@@ -65,6 +65,7 @@ class BotSettings(BaseSettings):
     max_risk_per_trade: float = Field(default=0.01, description="Max risk per trade (1% = 0.01)")
     max_daily_drawdown: float = Field(default=0.05, description="Max daily drawdown (5% = 0.05)")
     max_open_positions: int = Field(default=3, description="Maximum simultaneous open positions")
+    currency_exposure_cap: int = Field(default=2, description="Maximum positions sharing the same currency (base or quote)")
     min_reward_ratio: float = Field(default=2.0, description="Minimum Risk:Reward ratio")
     losing_streak_pause: int = Field(default=3, description="Pause after N consecutive losses")
     losing_streak_cooldown: int = Field(default=3600, description="Cooldown in seconds after losing streak")
@@ -83,6 +84,23 @@ class BotSettings(BaseSettings):
     atr_sl_multiplier: float = Field(default=1.5, description="ATR multiplier for stop loss distance")
     atr_tp_multiplier: float = Field(default=3.0, description="ATR multiplier for take profit distance")
     atr_volatility_spike: float = Field(default=2.0, description="ATR spike detection multiplier")
+
+    # ── Tick Logger Configuration ────────────────────────────────────────
+    tick_queue_maxsize: int = Field(default=10_000, description="Maximum size of the async tick queue before back‑pressure applies")
+    tick_batch_size: int = Field(default=500, description="Number of ticks to write per SQLite batch insert")
+    tick_flush_interval_secs: float = Field(default=2.0, description="Maximum seconds to wait before flushing the tick queue, even if batch size not reached")
+    enable_tick_deduplication: bool = Field(default=True, description="If true, drop consecutive ticks with identical bid/ask for the same symbol")
+    sqlite_wal_mode: bool = Field(default=True, description="Enable SQLite WAL mode for concurrent reads/writes")
+
+    # Volume-surge gate for ScalperMomentum (scalper-profile unblock).
+    # Latest-bar tick volume must be >= this × the 20-bar mean before a
+    # momentum signal fires. M1 forex tick volume rarely sustains 1.5×,
+    # so a profile can lower it (``VOLUME_SURGE_RATIO`` in .env.<profile>).
+    # Default 1.5 mirrors the prior hardcoded constant — no behaviour change.
+    volume_surge_ratio: float = Field(
+        default=1.5,
+        description="ScalperMomentum: latest-bar volume / 20-bar mean required before a signal fires (1.5 = prior hardcoded default)",
+    )
 
     higher_timeframe: str = Field(default="H4", description="Higher timeframe for trend analysis")
     entry_timeframe: str = Field(default="M15", description="Lower timeframe for trade entries")
@@ -127,6 +145,8 @@ class BotSettings(BaseSettings):
 
     # ── Position Sizing ─────────────────────────────────────────────
     starting_capital: float = Field(default=1000.0, description="Starting account capital")
+    lot_sizing_mode: str = Field(default="DYNAMIC", description="Mode for position sizing (DYNAMIC or FIXED)")
+    fixed_lot_size: float = Field(default=0.01, description="Lot size when mode is FIXED")
     volatility_position_scale: bool = Field(default=True, description="Scale position size with volatility")
 
     # ── Notifications ───────────────────────────────────────────────
@@ -137,14 +157,15 @@ class BotSettings(BaseSettings):
     # ── Dashboard ───────────────────────────────────────────────────
     dashboard_host: str = Field(default="0.0.0.0", description="Dashboard API host")
     dashboard_port: int = Field(default=8000, description="Dashboard API port")
+    dashboard_startup_timeout_secs: int = Field(default=120, env="GENESIS_DASHBOARD_STARTUP_TIMEOUT_SECS", description="Timeout in seconds for dashboard backend to bind")
 
     # ── Database ────────────────────────────────────────────────────
     database_url: str = Field(default="sqlite:///database/trades.db", description="Database URL")
-
+    
     # ── Logging ─────────────────────────────────────────────────────
     log_level: str = Field(default="INFO", description="Logging level")
     log_file: str = Field(default="logs/bot.log", description="Log file path")
-
+    
     # ── General ─────────────────────────────────────────────────────
     paper_trading: bool = Field(default=True, description="Paper trading mode (demo account)")
     bot_name: str = Field(default="Genesis Trading Bot", description="Bot display name")
@@ -160,6 +181,7 @@ class BotSettings(BaseSettings):
         "env_file": ".env",
         "env_file_encoding": "utf-8",
         "case_sensitive": False,
+        "extra": "ignore",
     }
 
 

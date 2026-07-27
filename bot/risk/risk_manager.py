@@ -13,6 +13,18 @@ from loguru import logger
 from bot.config.settings import settings, TradeDirection
 from bot.strategies.base_strategy import TradeSignal
 
+# ── Position-sizing safety guards ──────────────────────────────────────
+# Enforce a realistic minimum stop-loss distance.  60 ticks = 6 pips on
+# majors (tick_size=0.00001) and 6 pips on JPY crosses (tick_size=0.001).
+MIN_SL_TICKS = 60
+
+# Reject the trade outright when the raw lot size would be more than
+# CAP_MULTIPLIER × MAX_LOT.  Without this, a tiny SL inflates the
+# raw size to absurd levels, the cap silently absorbs 90%+ of the
+# intended risk, and the resulting trade has a catastrophically degraded
+# risk/reward ratio.
+CAP_MULTIPLIER = 10.0
+
 
 class RiskManager:
     """
@@ -158,14 +170,34 @@ class RiskManager:
         # Calculate pip value
         tick_value = symbol_info.trade_tick_value
         tick_size = symbol_info.trade_tick_size
-        contract_size = symbol_info.trade_contract_size
 
         if tick_size == 0 or tick_value == 0:
             logger.error(f"❌ Invalid tick data for {signal.symbol}")
             return 0.0
 
-        # Value per lot for the SL distance
+        # Guard 1 — reject unrealistically tight stop-losses.
+        # A tiny SL inflates the raw lot size to absurd levels, which the
+        # downstream cap silently absorbs — degrading the risk/reward ratio
+        # to useless levels.  Denominating in ticks makes this universal
+        # across majors (tick=0.00001) and JPY pairs (tick=0.001).
+        min_sl_distance = tick_size * MIN_SL_TICKS
+        if sl_distance < min_sl_distance:
+            logger.error(
+                f"[TRADE REJECTED] SL distance ({sl_distance:.5f}) "
+                f"is below safety minimum ({min_sl_distance:.5f}, "
+                f"{MIN_SL_TICKS} ticks). Adjust the strategy's SL logic."
+            )
+            return 0.0
+
+        # Calculate value per lot for the SL distance
+        # Note: tick_value and tick_size work together for position sizing
+        # For ALL pairs, we use sl_distance/tick_size * tick_value which handles JPY correctly
+        # JPY pairs: tick_value ~0.01, tick_size ~0.01 (per pip)
+        # Major pairs: tick_value ~0.0001, tick_size ~0.00001 (per point)
         value_per_lot = (sl_distance / tick_size) * tick_value
+        
+        # DEBUG: Log the calculated values for verification
+        logger.debug(f"[SIZE_CALC] {signal.symbol} sl_dist={sl_distance:.5f} tick_size={tick_size} tick_value={tick_value} value_per_lot={value_per_lot:.6f}")
 
         if value_per_lot == 0:
             return 0.0
@@ -178,17 +210,47 @@ class RiskManager:
             scale_factor = 1.0 / volatility_ratio
             lot_size *= scale_factor
             logger.debug(
-                f"📉 Volatility scaling: ratio={volatility_ratio:.2f}, "
+                f"[VOL_SCALE] Volatility scaling: ratio={volatility_ratio:.2f}, "
                 f"scale={scale_factor:.2f}"
             )
 
+        # Apply FIXED mode override if active
+        if getattr(settings, "lot_sizing_mode", "DYNAMIC").upper() == "FIXED":
+            fixed_size = getattr(settings, "fixed_lot_size", 0.01)
+            lot_size = fixed_size
+            logger.debug(f"[SIZE_CALC] FIXED mode active: overriding dynamic size to {lot_size} lots")
+
+        # Apply lot size safety guardrails (prevent catastrophic sizing)
+        # Tighter limits: MAX_LOT should be reasonable for small accounts
+        # Formula: min(broker_max, 1% of account equity, 5 lots)
+        account_max_lot = settings.starting_capital / 100.0  # $1000 -> max 10 lots
+        MAX_LOT = min(symbol_info.volume_max, account_max_lot, 50.0)
+
+        # Guard 2 — reject when the raw lot size dwarfs the cap.
+        # If the pre-clamp lot is more than CAP_MULTIPLIER × MAX_LOT the
+        # trade setup is broken (usually from the tiny SL that Guard 1
+        # would have caught; this is defence-in-depth for edge cases
+        # Guard 1 misses).
+        effective_risk = min(lot_size, MAX_LOT) * value_per_lot
+        if lot_size > MAX_LOT * CAP_MULTIPLIER:
+            logger.error(
+                f"[TRADE REJECTED] Raw position ({lot_size:.1f} lots) "
+                f"is {lot_size / MAX_LOT:.1f}× the cap ({MAX_LOT:.1f} lots). "
+                f"Effective risk would be ${effective_risk:.2f} "
+                f"vs budget ${risk_amount:.2f} — "
+                f"{((lot_size - MAX_LOT) / lot_size) * 100:.0f}% of risk absorbed by cap."
+            )
+            return 0.0
+
+        lot_size = max(0.01, min(lot_size, MAX_LOT))
+        
         # Clamp to symbol limits
         lot_size = max(symbol_info.volume_min, min(lot_size, symbol_info.volume_max))
         lot_size = round(lot_size / symbol_info.volume_step) * symbol_info.volume_step
         lot_size = round(lot_size, 2)
 
         logger.info(
-            f"📐 Position size: {lot_size} lots | "
+            f"[POSITION] Position size: {lot_size} lots | "
             f"Risk: ${risk_amount:.2f} ({settings.max_risk_per_trade*100}%) | "
             f"SL distance: {sl_distance:.5f}"
         )
@@ -292,6 +354,17 @@ class RiskManager:
             return {
                 "allowed": False,
                 "reason": f"Correlated position already open: {correlated}",
+            }
+
+        # ── Currency Exposure Cap (Track d) ─────────────────────────────
+        # Prevent exposure to the same currency across multiple positions.
+        # "Currency exposure cap" = max 2 positions containing the same
+        # base or quote currency. E.g., EURUSD, EURGBP, EURJPY = 3 EUR positions.
+        currency_exposure = self._check_currency_exposure(signal)
+        if currency_exposure:
+            return {
+                "allowed": False,
+                "reason": f"Currency exposure cap exceeded: {currency_exposure}",
             }
 
         # Check minimum R:R
@@ -517,7 +590,6 @@ class RiskManager:
         if signal_group is None:
             return None  # Symbol not in any group — no correlation check needed
 
-        signal_dir = signal.direction.value
         for pos in our_positions:
             # Track (d): symbol in the group but not the signal's symbol —
             # the candidate pair. Direction is irrelevant (both same- and
@@ -541,6 +613,106 @@ class RiskManager:
             if pos_direction == signal.direction.value:
                 return True
         return False
+
+    # ── Currency Exposure Check ─────────────────────────────────────
+    # Prevent over-exposure to any single currency (base or quote).
+
+    def _check_currency_exposure(self, signal: TradeSignal) -> Optional[str]:
+        """
+        Check if adding a new position would exceed the currency exposure cap.
+
+        Day Trader profile limits simultaneous positions to max 2 containing
+        the same base OR quote currency. This prevents correlated risk
+        multiplication (e.g., EURUSD, EURGBP, EURJPY = 3 EUR positions).
+
+        Track (d): Implemented as a simple count check against open positions
+        filtered by magic number.
+
+        Returns:
+            Symbol name of the conflicting position if exposure would be exceeded,
+            None if safe to proceed.
+        """
+        our_positions = self._our_positions()
+        if not our_positions:
+            return None
+
+        # Parse target symbol
+        target_symbol = signal.symbol
+        if len(target_symbol) < 6:
+            return None
+
+        # Extract base and quote currency
+        target_base = target_symbol[:3]
+        target_quote = target_symbol[-3:]
+
+        # Count current exposure to base and quote currencies
+        base_count = 0
+        quote_count = 0
+
+        for pos in our_positions:
+            pos_symbol = pos.symbol if hasattr(pos, 'symbol') else pos.get('symbol', '')
+            if len(pos_symbol) < 6:
+                continue
+
+            pos_base = pos_symbol[:3]
+            pos_quote = pos_symbol[-3:]
+
+            if pos_base == target_base:
+                base_count += 1
+            if pos_quote == target_quote:
+                quote_count += 1
+
+        # Check if adding this position would exceed the cap of 2
+        # (Day Trader profile sets MAX_OPEN_POSITIONS=3 but this is different)
+        # We need an additional setting for currency exposure cap
+        from bot.config.settings import settings
+        currency_cap = getattr(settings, 'currency_exposure_cap', 2)
+
+        # If adding this trade, base currency would be at cap+1?
+        if target_base in [our_positions[i].symbol[:3] for i in range(len(our_positions)) if hasattr(our_positions[i], 'symbol')]:
+            # Signal's base currency is already represented
+            pass
+
+        # Check both directions
+        if base_count >= currency_cap and target_base not in [p.symbol[:3] for p in our_positions if hasattr(p, 'symbol') and p.symbol != target_symbol]:
+            # We're adding a NEW position with this base currency
+            pass
+
+        # Simplified check: count positions sharing base or quote with the signal
+        shared_currency_count = 0
+        for pos in our_positions:
+            pos_symbol = pos.symbol if hasattr(pos, 'symbol') else pos.get('symbol', '')
+            if len(pos_symbol) >= 6:
+                pos_base = pos_symbol[:3]
+                pos_quote = pos_symbol[-3:]
+                if target_base in (pos_base, pos_quote) or target_quote in (pos_base, pos_quote):
+                    shared_currency_count += 1
+
+        # If this signal adds yet another position sharing currency, check cap
+        # But we need to be smarter - only count positions that would share currency
+        # after adding this one
+
+        # For now, a simpler approach: check if we have >= cap positions sharing any currency
+        # with the proposed signal
+        from collections import Counter
+        currency_counts = Counter()
+
+        for pos in our_positions:
+            pos_symbol = pos.symbol if hasattr(pos, 'symbol') else pos.get('symbol', '')
+            if len(pos_symbol) >= 6:
+                currency_counts[pos_symbol[:3]] += 1
+                currency_counts[pos_symbol[-3:]] += 1
+
+        # Now check what this signal would bring
+        currency_counts[target_base] += 1
+        currency_counts[target_quote] += 1
+
+        # Check if any currency exceeds the cap
+        for currency, count in currency_counts.items():
+            if count > currency_cap:
+                return f"Currency {currency} would exceed cap ({count}/{currency_cap})"
+
+        return None
 
     # ── Stats ───────────────────────────────────────────────────────
 

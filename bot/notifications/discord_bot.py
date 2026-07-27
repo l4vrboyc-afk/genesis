@@ -83,11 +83,13 @@ class DiscordBot(commands.Bot):
                 # Format and send based on notification type — single retry on
                 # transient Discord HTTP failures so one bad message doesn't
                 # kill the listener
+                # Mapping of notification types to handler functions.
+                # Some payloads may not include a "data" field (e.g., alerts). Use .get() to avoid KeyError.
                 send_map = {
-                    "trade_open": (self._send_trade_open_embed, payload["data"]),
-                    "trade_close": (self._send_trade_close_embed, payload["data"]),
+                    "trade_open": (self._send_trade_open_embed, payload.get("data", {})),
+                    "trade_close": (self._send_trade_close_embed, payload.get("data", {})),
                     "alert": (self._send_alert_embed, payload),
-                    "daily_summary": (self._send_daily_summary_embed, payload["data"]),
+                    "daily_summary": (self._send_daily_summary_embed, payload.get("data", {})),
                     "custom": (self._send_custom_embed, payload),
                 }
                 entry = send_map.get(payload["type"])
@@ -231,7 +233,7 @@ class DiscordBot(commands.Bot):
         async def cmd_status(ctx):
             stats = await self.orchestrator.get_status()
             embed = discord.Embed(
-                title=f"🤖 Genesis Bot Status",
+                title="⚙️ Genesis Bot Status",
                 color=0x3498db,
                 timestamp=datetime.now()
             )
@@ -388,7 +390,6 @@ class DiscordBot(commands.Bot):
 
         @self.command(name="trades", help="Show the last 5 trades")
         async def cmd_trades(ctx):
-            summary = self.orchestrator.performance_tracker.get_summary()
             recent_trades = self.orchestrator.performance_tracker._get_window(5)
             
             if not recent_trades:

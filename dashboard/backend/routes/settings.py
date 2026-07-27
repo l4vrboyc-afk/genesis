@@ -29,6 +29,8 @@ async def get_settings():
         "max_risk_per_trade": bs.max_risk_per_trade,
         "max_daily_drawdown": bs.max_daily_drawdown,
         "max_open_positions": bs.max_open_positions,
+        "lot_sizing_mode": bs.lot_sizing_mode,
+        "fixed_lot_size": bs.fixed_lot_size,
         "trading_pairs": bs.trading_pairs,
         "paper_trading": bs.paper_trading,
         "bot_name": bs.bot_name,
@@ -55,6 +57,10 @@ async def update_settings(req: SettingsUpdateRequest):
             bs.max_daily_drawdown = req.max_daily_drawdown
         if req.max_open_positions is not None:
             bs.max_open_positions = req.max_open_positions
+        if req.lot_sizing_mode is not None:
+            bs.lot_sizing_mode = req.lot_sizing_mode
+        if req.fixed_lot_size is not None:
+            bs.fixed_lot_size = req.fixed_lot_size
         if req.trading_pairs is not None:
             bs.trading_pairs = req.trading_pairs
             # Re-enable pairs in MT5 Watch List (async -- routed through the
@@ -67,6 +73,8 @@ async def update_settings(req: SettingsUpdateRequest):
         await dba.set_state("max_risk_per_trade", str(bs.max_risk_per_trade))
         await dba.set_state("max_daily_drawdown", str(bs.max_daily_drawdown))
         await dba.set_state("max_open_positions", str(bs.max_open_positions))
+        await dba.set_state("lot_sizing_mode", str(bs.lot_sizing_mode))
+        await dba.set_state("fixed_lot_size", str(bs.fixed_lot_size))
         await dba.set_state("trading_pairs", ",".join(bs.trading_pairs))
         await dba.set_state("paper_trading", "1" if bs.paper_trading else "0")
 

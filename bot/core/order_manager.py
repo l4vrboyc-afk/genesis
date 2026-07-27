@@ -2,12 +2,12 @@
 Place, modify, close orders with full error handling and logging.
 """
 
-import asyncio
 import MetaTrader5 as mt5
 from datetime import datetime
 from typing import Optional, List
 from loguru import logger
 from bot.config.settings import settings, TradeDirection
+from bot.core.mt5_connector import _explain_mt5_error
 
 
 class OrderManager:
@@ -35,6 +35,55 @@ class OrderManager:
         """
         self._executor = executor
 
+    # ── Execution helpers ────────────────────────────────────────────
+
+    @staticmethod
+    def _choose_filling(symbol_info) -> int:
+        """Pick a ``type_filling`` the broker advertises for this symbol.
+
+        ``mt5.order_send`` returns ``None`` — before the request ever
+        reaches the trade server — for a filling mode the symbol doesn't
+        support. That was the scalper's 0-fill failure: every order
+        hardcoded ``ORDER_FILLING_IOC``, but the MetaQuotes-Demo symbols
+        don't advertise IOC, so all 83 attempts returned ``None``.
+
+        ``symbol_info.filling_mode`` is a bitmask (MT5 ``SYMBOL_FILLING_*``):
+        bit 0 (1) = FOK supported, bit 1 (2) = IOC supported. We prefer
+        IOC (the legacy choice) then FOK, and fall back to ``RETURN`` for
+        market-execution accounts that advertise neither.
+        """
+        mask = getattr(symbol_info, "filling_mode", 0) or 0
+        if mask & 2:   # IOC
+            return mt5.ORDER_FILLING_IOC
+        if mask & 1:   # FOK
+            return mt5.ORDER_FILLING_FOK
+        return mt5.ORDER_FILLING_RETURN
+
+    @staticmethod
+    def _clamp_stops(
+        side_buy: bool, price: float, sl: float, tp: float, symbol_info
+    ) -> tuple[float, float]:
+        """Widen SL/TP out to the broker's ``trade_stops_level``.
+
+        MT5 rejects orders whose SL/TP sit closer to price than the
+        symbol's ``trade_stops_level`` (points × ``point``). The scalper's
+        M1 0.8×ATR stops can fall *inside* that band — the sizing log
+        showed SL distances as small as ``0.00002`` — so without this
+        clamp every fill we finally grant would die on "invalid stops".
+
+        The clamp only ever WIDENS (SL/TP further from price), so it can't
+        invalidate the risk validator's R:R or a favorable trail: a wider
+        SL is the only direction that stays broker-legal here.
+        """
+        stops = (getattr(symbol_info, "trade_stops_level", 0) or 0) * (
+            getattr(symbol_info, "point", 0.0) or 0.0
+        )
+        if stops <= 0:
+            return sl, tp
+        if side_buy:
+            return min(sl, price - stops), max(tp, price + stops)
+        return max(sl, price + stops), min(tp, price - stops)
+
     # ── Place Orders ────────────────────────────────────────────────
 
     async def place_market_order(
@@ -42,8 +91,8 @@ class OrderManager:
         symbol: str,
         direction: TradeDirection,
         volume: float,
-        sl: float,
         tp: float,
+        sl: Optional[float] = None,
         comment: str = "Genesis Bot",
         magic: Optional[int] = None,
     ) -> Optional[dict]:
@@ -54,6 +103,15 @@ class OrderManager:
             magic = settings.magic_number
 
         tick = await self._executor.submit(mt5.symbol_info_tick, symbol)
+        # If SL not provided, compute dynamic stop based on ATR volatility
+        if sl is None:
+            try:
+                from bot.core.risk.atr_stop import calculate_atr_stop
+                sl = calculate_atr_stop(symbol, direction, settings.atr_sl_multiplier)
+                logger.info(f"[ATR] Dynamic SL for {symbol} calculated: {sl:.5f}")
+            except Exception as e:
+                logger.error(f"Failed to calculate ATR stop for {symbol}: {e}")
+                sl = tick.ask if direction == TradeDirection.BUY else tick.bid
         if tick is None:
             logger.error(f"❌ Failed to get price for {symbol}")
             return None
@@ -73,31 +131,50 @@ class OrderManager:
             logger.error(f"❌ Symbol info not found for {symbol}")
             return None
 
+        # Adaptive filling mode + broker-legal stops distance. See
+        # ``_choose_filling`` / ``_clamp_stops`` — these fix the class of
+        # 0-fill returns (unsupported filling) and "invalid stops"
+        # rejections that the scalper hit on MetaQuotes-Demo.
+        filling = self._choose_filling(symbol_info)
+        sl, tp = self._clamp_stops(
+            order_type == mt5.ORDER_TYPE_BUY, price, sl, tp, symbol_info
+        )
+
         volume = self._normalize_volume(volume, symbol_info)
 
         request = {
             "action": mt5.TRADE_ACTION_DEAL,
-            "symbol": symbol,
-            "volume": volume,
-            "type": order_type,
-            "price": price,
-            "sl": round(sl, symbol_info.digits),
-            "tp": round(tp, symbol_info.digits),
+            "symbol": str(symbol),
+            "volume": float(volume),
+            "type": int(order_type),
+            "price": float(price),
+            "sl": float(round(sl, symbol_info.digits)),
+            "tp": float(round(tp, symbol_info.digits)),
             "deviation": 20,
-            "magic": magic,
-            "comment": comment,
+            "magic": int(magic),
+            "comment": str(comment),
             "type_time": mt5.ORDER_TIME_GTC,
-            "type_filling": mt5.ORDER_FILLING_IOC,
+            "type_filling": int(filling),
         }
+        def _do_send():
+            return mt5.order_send(request)
 
-        result = await self._executor.submit(mt5.order_send, request)
+        result = await self._executor.submit(_do_send)
         if result is None:
-            logger.error(f"❌ Order send returned None for {symbol}")
+            # order_send returns None pre-server (unsupported filling,
+            # not-connected, malformed request). Surface mt5.last_error()
+            # so the real reason is logged instead of a bare "None" — the
+            # silence here is what let the 0-fill bug run for 8 hours.
+            logger.error(
+                f"[ORDER_FAILED] Order send returned None for {symbol} "
+                f"(filling={filling}); {_explain_mt5_error(mt5.last_error())}"
+            )
             return None
 
         if result.retcode != mt5.TRADE_RETCODE_DONE:
             logger.error(
-                f"❌ Order failed for {symbol}: {result.retcode} — {result.comment}"
+                f"[ORDER_FAILED] Order failed for {symbol}: {result.retcode} — {result.comment}; "
+                f"{_explain_mt5_error(mt5.last_error())}"
             )
             return None
 
@@ -115,11 +192,17 @@ class OrderManager:
         }
 
         logger.success(
-            f"✅ {direction.value.upper()} {symbol} | "
+            f"[ORDER_SUCCESS] {direction.value.upper()} {symbol} | "
             f"Vol: {volume} | Price: {result.price:.5f} | "
             f"SL: {sl:.5f} | TP: {tp:.5f} | "
             f"Ticket: {result.order}"
         )
+        # Log the trade to persistent storage
+        try:
+            from bot.core.data_logger import log_trade
+            await log_trade(order_info)
+        except Exception as e:
+            logger.error(f"Failed to persist trade log: {e}")
 
         return order_info
 
@@ -147,20 +230,23 @@ class OrderManager:
 
         request = {
             "action": mt5.TRADE_ACTION_SLTP,
-            "position": ticket,
-            "symbol": pos.symbol,
-            "sl": round(sl if sl is not None else pos.sl, symbol_info.digits),
-            "tp": round(tp if tp is not None else pos.tp, symbol_info.digits),
+            "position": int(ticket),
+            "symbol": str(pos.symbol),
+            "sl": float(round(sl if sl is not None else pos.sl, symbol_info.digits)),
+            "tp": float(round(tp if tp is not None else pos.tp, symbol_info.digits)),
         }
 
-        result = await self._executor.submit(mt5.order_send, request)
+        def _do_send():
+            return mt5.order_send(request)
+
+        result = await self._executor.submit(_do_send)
         if result is None or result.retcode != mt5.TRADE_RETCODE_DONE:
             error = result.comment if result else "Unknown error"
             logger.error(f"❌ Failed to modify position {ticket}: {error}")
             return False
 
         logger.info(
-            f"📝 Modified position {ticket} | "
+            f"[MODIFY] Modified position {ticket} | "
             f"SL: {request['sl']:.5f} | TP: {request['tp']:.5f}"
         )
         return True
@@ -217,19 +303,22 @@ class OrderManager:
 
         request = {
             "action": mt5.TRADE_ACTION_SLTP,
-            "position": ticket,
-            "symbol": symbol,
-            "sl": round(new_sl, symbol_info.digits),
-            "tp": round(existing_tp, symbol_info.digits) if existing_tp > 0 else 0,
+            "position": int(ticket),
+            "symbol": str(symbol),
+            "sl": float(round(new_sl, symbol_info.digits)),
+            "tp": float(round(existing_tp, symbol_info.digits)) if existing_tp > 0 else 0.0,
         }
 
-        result = await self._executor.submit(mt5.order_send, request)
+        def _do_send():
+            return mt5.order_send(request)
+
+        result = await self._executor.submit(_do_send)
         if result is None or result.retcode != mt5.TRADE_RETCODE_DONE:
             error = result.comment if result else "Unknown error"
             logger.error(f"❌ Failed to apply trailing stop {ticket}: {error}")
             return False
 
-        logger.debug(f"📝 Trailing stop applied: Ticket {ticket} SL → {request['sl']:.5f}")
+        logger.debug(f"[MODIFY] Trailing stop applied: Ticket {ticket} SL → {request['sl']:.5f}")
         return True
 
     # ── Close Orders ────────────────────────────────────────────────
@@ -250,6 +339,12 @@ class OrderManager:
         if tick is None:
             return None
 
+        symbol_info = await self._executor.submit(mt5.symbol_info, pos.symbol)
+        if symbol_info is None:
+            logger.error(f"❌ Symbol info not found for {pos.symbol} (close)")
+            return None
+        filling = self._choose_filling(symbol_info)
+
         if pos.type == mt5.ORDER_TYPE_BUY:
             close_type = mt5.ORDER_TYPE_SELL
             price = tick.bid
@@ -259,22 +354,28 @@ class OrderManager:
 
         request = {
             "action": mt5.TRADE_ACTION_DEAL,
-            "position": ticket,
-            "symbol": pos.symbol,
-            "volume": pos.volume,
-            "type": close_type,
-            "price": price,
+            "position": int(ticket),
+            "symbol": str(pos.symbol),
+            "volume": float(pos.volume),
+            "type": int(close_type),
+            "price": float(price),
             "deviation": 20,
-            "magic": settings.magic_number,
-            "comment": comment,
+            "magic": int(settings.magic_number),
+            "comment": str(comment),
             "type_time": mt5.ORDER_TIME_GTC,
-            "type_filling": mt5.ORDER_FILLING_IOC,
+            "type_filling": int(filling),
         }
 
-        result = await self._executor.submit(mt5.order_send, request)
+        def _do_send():
+            return mt5.order_send(request)
+
+        result = await self._executor.submit(_do_send)
         if result is None or result.retcode != mt5.TRADE_RETCODE_DONE:
             error = result.comment if result else "Unknown error"
-            logger.error(f"❌ Failed to close position {ticket}: {error}")
+            logger.error(
+                f"❌ Failed to close position {ticket}: {error} "
+                f"(filling={filling}); {_explain_mt5_error(mt5.last_error())}"
+            )
             return None
 
         close_info = {
@@ -312,7 +413,7 @@ class OrderManager:
                 results.append(result)
 
         if results:
-            logger.info(f"🧹 Closed {len(results)} position(s)")
+            logger.info(f"[CLEANUP] Closed {len(results)} position(s)")
 
         return results
 

@@ -186,7 +186,7 @@ class SmartTrendStrategy(BaseStrategy):
 
         if bias == TradeDirection.BUY:
             # Check for bullish Order Blocks
-            ob_candles = recent[recent["ob_bullish"] == True]
+            ob_candles = recent[recent["ob_bullish"]]
             for idx, row in ob_candles.iterrows():
                 if not np.isnan(row["ob_bull_low"]) and not np.isnan(row["ob_bull_high"]):
                     # Price is touching or inside the OB zone
@@ -197,7 +197,7 @@ class SmartTrendStrategy(BaseStrategy):
                         return result
 
             # Check for bullish FVGs
-            fvg_candles = recent[recent["fvg_bullish"] == True]
+            fvg_candles = recent[recent["fvg_bullish"]]
             for idx, row in fvg_candles.iterrows():
                 if not np.isnan(row["fvg_bull_bottom"]) and not np.isnan(row["fvg_bull_top"]):
                     if row["fvg_bull_bottom"] <= price <= row["fvg_bull_top"]:
@@ -208,7 +208,7 @@ class SmartTrendStrategy(BaseStrategy):
 
         elif bias == TradeDirection.SELL:
             # Check for bearish Order Blocks
-            ob_candles = recent[recent["ob_bearish"] == True]
+            ob_candles = recent[recent["ob_bearish"]]
             for idx, row in ob_candles.iterrows():
                 if not np.isnan(row["ob_bear_low"]) and not np.isnan(row["ob_bear_high"]):
                     if row["ob_bear_low"] * 0.999 <= price <= row["ob_bear_high"]:
@@ -218,7 +218,7 @@ class SmartTrendStrategy(BaseStrategy):
                         return result
 
             # Check for bearish FVGs
-            fvg_candles = recent[recent["fvg_bearish"] == True]
+            fvg_candles = recent[recent["fvg_bearish"]]
             for idx, row in fvg_candles.iterrows():
                 if not np.isnan(row["fvg_bear_bottom"]) and not np.isnan(row["fvg_bear_top"]):
                     if row["fvg_bear_bottom"] <= price <= row["fvg_bear_top"]:

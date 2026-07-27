@@ -20,8 +20,7 @@ async def get_status():
     try:
         orch = _app_store.state.orchestrator
         status_data = await orch.get_status()
-        open_trades = await orch.db.get_open_trades()
-        status_data["open_trades"] = [t.to_dict() for t in open_trades]
+        status_data["open_trades"] = await orch.get_live_open_trades()
         return status_data
     except Exception as e:
         logger.error(f"Error in /api/status: {e}")

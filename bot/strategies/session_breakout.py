@@ -1,14 +1,30 @@
+"""
+Session Breakout Strategy.
+
+Enhanced version for Day Trader profile - uses session_manager for
+precise session timing during London (07:00 UTC) and NY (12:00 UTC) opens.
+"""
+
 import math
 import pandas as pd
-from datetime import datetime, timezone
+
 from typing import Optional
+
+
 from bot.config.settings import settings, MarketRegime, TradeDirection
 from bot.strategies.base_strategy import BaseStrategy, TradeSignal
+from bot.strategies.session_manager import get_session_manager
+
 
 class SessionBreakoutStrategy(BaseStrategy):
     """
-    Session Breakout Strategy.
-    Trades the opening volatility of the London or New York sessions.
+    Session Breakout Strategy for London and New York session opens.
+
+    Session Open Windows (UTC):
+    - London: 07:00 - 07:30 (opening window)
+    - New York: 12:00 - 12:30 (opening window)
+
+    Enters on momentum as volume spikes at session open.
     """
 
     def __init__(self):
@@ -17,12 +33,16 @@ class SessionBreakoutStrategy(BaseStrategy):
         self._description = "Targets London/NY session opening volatility"
         self._suitable_regimes = [MarketRegime.TRENDING, MarketRegime.RANGING]
 
+        # Session manager for precise timing
+        self._session_mgr = get_session_manager()
+
+        # Opening window duration (minutes) for breakout detection
+        self._opening_window_minutes = 30
+
     def _is_active_session(self) -> bool:
-        # Simplified: London opens ~8 UTC, NY opens ~13 UTC
-        current_hour = datetime.now(timezone.utc).hour
-        is_london_open = 8 <= current_hour <= 10
-        is_ny_open = 13 <= current_hour <= 15
-        return is_london_open or is_ny_open
+        """Check if we're in an opening window of an active session."""
+        session_info = self._session_mgr.get_current_session()
+        return session_info.is_opening_window
 
     def generate_signal(
         self,

@@ -41,6 +41,27 @@ async def get_trades(
         logger.error(f"Error in /api/trades: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+@router.post("/{ticket}/close", tags=["trades"])
+async def close_trade(ticket: int):
+    """Manually close an open position by ticket number."""
+    from fastapi import HTTPException
+    
+    try:
+        orch = _app_store.state.orchestrator
+        if not orch or not orch.order_manager:
+            raise HTTPException(status_code=503, detail="Order manager not ready")
+            
+        success = await orch.order_manager.close_position(ticket, comment="Closed via Dashboard")
+        if not success:
+            raise HTTPException(status_code=400, detail=f"Failed to close position {ticket}")
+            
+        return {"ok": True, "message": f"Successfully closed position {ticket}"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error closing trade {ticket}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 def register_routes(app, orchestrator=None, db=None):  # noqa: ANN001
     global _app_store

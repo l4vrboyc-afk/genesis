@@ -31,7 +31,28 @@ import subprocess
 import sys
 import threading
 import time
+from bot.config.settings import BotSettings
 import webbrowser
+import atexit
+from loguru import logger
+
+# Global controller reference for signal/atexit handlers
+_global_controller: "GUIController | None" = None
+
+def _handle_exit(signum, frame):
+    """Signal handler that gracefully shuts down the bot before exiting."""
+    if _global_controller is not None:
+        _global_controller.shutdown()
+    # Restore default handling and re-raise the signal
+    signal.signal(signum, signal.SIG_DFL)
+    os.kill(os.getpid(), signum)
+
+# Register handlers for common termination signals
+for _sig in (signal.SIGINT, signal.SIGTERM):
+    signal.signal(_sig, _handle_exit)
+
+# Register atexit shutdown
+atexit.register(lambda: _global_controller.shutdown() if _global_controller else None)
 from pathlib import Path
 
 try:
@@ -86,42 +107,61 @@ PROFILE_CONFIG: dict[str, dict] = {
         "label": "Swing Trader",
         "category": "Default",
         "description": (
-            "H4 trend filter with M15 entries. "
-            "Balanced risk-reward for medium-term positions."
+            "H4/M15 Institutional Swing Matrix. Deep regime hysteresis, strict currency exposure caps, and wide ATR bands for catching multi-day trends."
         ),
         "timeframes": "H4 / M15",
         "max_positions": 3,
         "max_risk": "1.0%",
         "rr_ratio": "2.0",
         "news_filter": True,
+        "session_aware": True,
+        "currency_exposure_cap": 3,
     },
     "scalper": {
         "port": 8001,
         "label": "Fast Scalper",
         "category": "Scalper",
         "description": (
-            "M15 trend filter with M1 entries. "
-            "Tight stops, smaller targets, higher frequency."
+            "M15/M1 High-Frequency Volatility Engine. Micro-regime tracking, volume-surge entry gates, tight equity-floor kill switch, and strict exposure limits."
         ),
         "timeframes": "M15 / M1",
         "max_positions": 5,
         "max_risk": "0.5%",
         "rr_ratio": "1.0",
         "news_filter": True,
+        "session_aware": True,
+        "currency_exposure_cap": 1,
     },
     "breakout": {
         "port": 8002,
         "label": "Breakout Hunter",
         "category": "Breakout",
         "description": (
-            "H1 trend filter with M15 entries. "
-            "Targets range breakouts with wider stops."
+            "H1/M15 Kinetic Breakout System. Volatility-spike detection, volume surge gating, and dynamic ATR scaling to capture explosive momentum phases."
         ),
         "timeframes": "H1 / M15",
         "max_positions": 2,
         "max_risk": "1.5%",
         "rr_ratio": "1.5",
         "news_filter": True,
+        "session_aware": True,
+        "currency_exposure_cap": 2,
+    },
+    "daytrader": {
+        "port": 8003,
+        "label": "Day Trader",
+        "category": "Advanced",
+        "description": (
+            "3×14 matrix: Trend Engine + Mean Reversion + Breakout across 14 pairs. "
+            "Session-aware, currency exposure capped, daily loss circuit breaker."
+        ),
+        "timeframes": "H1 / M15",
+        "max_positions": 3,
+        "max_risk": "1.0%",
+        "rr_ratio": "2.0",
+        "news_filter": True,
+        "session_aware": True,
+        "currency_exposure_cap": 2,
     },
 }
 
@@ -424,6 +464,7 @@ def _run_preflight() -> tuple[int, str]:
             env={**os.environ, "PYTHONIOENCODING": "utf-8"},
             capture_output=True,
             text=True,
+            encoding="utf-8",
             timeout=30,
         )
     except FileNotFoundError as exc:
@@ -589,11 +630,12 @@ class GUIController:
             self._report_error(str(exc))
             return
 
-        _log(f"waiting for port {conn_host}:{port} (60s deadline)...")
-        if not _wait_for_port(port, deadline_sec=60.0):
+        timeout_secs = BotSettings().dashboard_startup_timeout_secs
+        _log(f"waiting for port {conn_host}:{port} ({timeout_secs}s deadline)...")
+        if not _wait_for_port(port, deadline_sec=timeout_secs):
             _log("PORT WAIT TIMED OUT")
             self._kill_bot()
-            self._report_error(f"Backend did not bind to :{port} within 60 s")
+            self._report_error(f"Backend did not bind to :{port} within {timeout_secs} s")
             return
         _log(f"port {port} is listening")
 
@@ -651,7 +693,7 @@ class GUIController:
     def get_profiles(self) -> list[dict]:
         """Return the available profiles with ports and labels."""
         result: list[dict] = []
-        for key in ("default", "scalper", "breakout"):
+        for key in PROFILE_CONFIG:
             cfg = PROFILE_CONFIG[key]
             result.append(
                 {"id": key, "label": cfg["label"], "port": cfg["port"]}
@@ -873,15 +915,15 @@ def main() -> int:
     # -- Preflight -----------------------------------------------------------
     rc, output = _run_preflight()
     if rc != 0:
-        print(f"[launcher] preflight failed (rc={rc})")
+        print(f"[launcher] initial preflight failed (rc={rc}) - opening GUI anyway")
         print("=" * 60)
-        print((output or "").rstrip() or "(no output from preflight)")
+        safe_output = (output or "").rstrip() or "(no output from preflight)"
+        enc = getattr(sys.stdout, "encoding", None) or "utf-8"
+        print(safe_output.encode(enc, errors="replace").decode(enc, errors="replace"))
         print("=" * 60)
-        print(
-            "[launcher] NOT launching. Fix the issue(s) above and run again."
-        )
-        time.sleep(8.0)
-        return 4
+        # We no longer exit here. The GUI's profile picker will re-run
+        # the preflight check for the specifically selected profile and
+        # display the errors in the HTML UI natively.
 
     # -- WebView2 runtime check (Windows) ------------------------------------
     if not _check_webview2_runtime():
@@ -909,7 +951,28 @@ def main() -> int:
     print(f"[launcher] picker_url    = {picker_url}")
     print(f"[launcher] picker size   = {picker.stat().st_size} bytes")
 
-    controller = GUIController()
+    # Pre‑launch cleanup: kill any stray bot process still listening on this profile's port.
+    def _kill_existing_bot(port: int):
+        """Force‑kill a stray bot process bound to *port* without closing positions."""
+        try:
+            # Windows netstat to locate PID listening on the port
+            result = subprocess.run(["netstat", "-ano"], capture_output=True, text=True, check=True)
+            for line in result.stdout.splitlines():
+                if f":{port}" in line and "LISTENING" in line:
+                    parts = line.split()
+                    pid = parts[-1]
+                    if int(pid) != os.getpid():
+                        logger.info(f"[launcher] Killing stray bot process PID {pid} on port {port}")
+                        subprocess.run(["taskkill", "/PID", pid, "/F"], capture_output=True)
+        except Exception as exc:
+            logger.warning(f"[launcher] Failed to cleanup stray bot on port {port}: {exc}")
+
+    # Use the profile's configured port for cleanup
+    profile_port = PROFILE_CONFIG.get(os.getenv("GENESIS_PROFILE", "default"), {}).get("port", 8000)
+    _kill_existing_bot(profile_port)
+
+    _global_controller = GUIController()
+    controller = _global_controller
 
     window = webview.create_window(
         "Genesis Trading Bot",

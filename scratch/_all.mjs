@@ -117,7 +117,7 @@
                         <td><span class="badge ${p.direction === 'buy' ? 'badge-buy' : 'badge-sell'}">${p.direction}</span></td>
                         <td><code>${p.volume.toFixed(2)}</code></td>
                         <td>${p.entry_price.toFixed(5)}</td>
-                        <td>${p.exit_price ? p.exit_price.toFixed(5) : '-'}</td>
+                        <td>${p.current_price ? p.current_price.toFixed(5) : '-'}</td>
                         <td style="font-size: 0.8rem; color: var(--text-secondary)">SL: ${p.sl.toFixed(5)}<br>TP: ${p.tp.toFixed(5)}</td>
                         <td class="${p.profit >= 0 ? 'color-win' : 'color-loss'}" style="font-weight: 600">
                             $${p.profit.toFixed(2)}

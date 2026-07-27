@@ -58,13 +58,14 @@ body {
 /* ── Cards Grid ──────────────────────────────────────────── */
 .cards {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: 1.25rem;
   width: 100%;
-  max-width: 960px;
+  max-width: 1200px;
   margin-bottom: 1.5rem;
 }
-@media (max-width: 850px) { .cards { grid-template-columns: 1fr; max-width: 400px; } }
+@media (max-width: 1024px) { .cards { grid-template-columns: repeat(2, 1fr); max-width: 700px; } }
+@media (max-width: 600px) { .cards { grid-template-columns: 1fr; max-width: 400px; } }
 
 /* ── Profile Card ────────────────────────────────────────── */
 .card {
@@ -98,6 +99,7 @@ body {
 .badge-default { background: rgba(0,112,243,0.15); color: #3b82f6; border: 1px solid rgba(59,130,246,0.25); }
 .badge-scalper { background: rgba(255,145,0,0.15); color: var(--orange); border: 1px solid rgba(255,145,0,0.25); }
 .badge-breakout { background: rgba(177,85,255,0.15); color: var(--purple); border: 1px solid rgba(177,85,255,0.25); }
+.badge-daytrader { background: rgba(0,238,118,0.15); color: #22c55e; border: 1px solid rgba(34,197,94,0.25); }
 
 .card h3 { font-size: 1.1rem; font-weight: 700; margin-bottom: 0.4rem; }
 .card .card-desc {
@@ -120,7 +122,7 @@ body {
 
 /* ── Preflight Panel ─────────────────────────────────────── */
 .preflight-panel {
-  width: 100%; max-width: 960px;
+  width: 100%; max-width: 1200px;
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: 12px;
@@ -181,7 +183,7 @@ body {
 .launch-warn {
   font-size: 0.8rem; color: var(--orange);
   display: none;
-  max-width: 960px;
+  max-width: 1200px;
   margin-top: -0.5rem;
   margin-bottom: 1rem;
   line-height: 1.4;
@@ -190,7 +192,7 @@ body {
 .launch-error {
   font-size: 0.8rem; color: var(--red);
   display: none;
-  max-width: 960px;
+  max-width: 1200px;
   line-height: 1.4;
 }
 .launch-error.visible { display: block; }
@@ -272,6 +274,19 @@ body {
       <div class="card-meta-row"><span class="icon">&#128202;</span> Max Positions: <span>2</span></div>
       <div class="card-meta-row"><span class="icon">&#9889;</span> Risk / Trade: <span>1.5%</span></div>
       <div class="card-meta-row"><span class="icon">&#128737;</span> R:R Ratio: <span>1.5</span></div>
+    </div>
+  </div>
+
+  <div class="card" data-profile="daytrader" tabindex="0">
+    <div class="card-badge badge-daytrader">Day Trader</div>
+    <h3>Day Trader</h3>
+    <p class="card-desc">3×14 matrix: Trend Engine + Mean Reversion + Breakout across 14 pairs. Session-aware strategy routing.</p>
+    <div class="card-meta">
+      <div class="card-meta-row"><span class="icon">&#9201;</span> Timeframes: <span>H1 / M15</span></div>
+      <div class="card-meta-row"><span class="icon">&#128202;</span> Max Positions: <span>3</span></div>
+      <div class="card-meta-row"><span class="icon">&#9889;</span> Risk / Trade: <span>1.0%</span></div>
+      <div class="card-meta-row"><span class="icon">&#128737;</span> R:R Ratio: <span>2.0</span></div>
+      <div class="card-meta-row"><span class="icon">&#128453;</span> Session: <span>Session-Aware</span></div>
     </div>
   </div>
 </div>
@@ -458,7 +473,16 @@ function launchProfile() {
   window.pywebview.api.select_profile(selected)
     .then(resp => {
       if (resp && resp.ok) {
-        // Launcher handles navigation — overlay stays until window redirects
+        // Launcher handles navigation in a background thread — overlay stays
+        // until the webview navigates away.  Safety timeout: if the webview
+        // doesn't navigate within 90 s (bot can take up to 60 s to bind port),
+        // dismiss the overlay and show an error so the user isn't stuck.
+        setTimeout(() => {
+          if (document.getElementById('overlay').classList.contains('active')) {
+            document.getElementById('overlay').classList.remove('active');
+            showError('Dashboard navigation timed out. Check logs/launcher.log for details.');
+          }
+        }, 90000);
       } else {
         document.getElementById('overlay').classList.remove('active');
         showError('Launch failed: ' + (resp ? resp.error || 'unknown' : 'no response'));

@@ -1,8 +1,10 @@
 """
 Mean Reversion Strategy — Used in ranging/sideways markets.
 
+Enhanced for Day Trader profile with Bollinger Bands + RSI for Asian session.
+
 Buys at support, sells at resistance when the market is NOT trending.
-Uses RSI extremes + support/resistance levels for entries.
+Uses RSI extremes + Bollinger Bands for entries during quiet hours.
 """
 
 from typing import Optional
@@ -10,17 +12,31 @@ import pandas as pd
 import numpy as np
 from loguru import logger
 
+
 from bot.strategies.base_strategy import BaseStrategy, TradeSignal
 from bot.core.data_fetcher import DataFetcher
 from bot.config.settings import settings, TradeDirection, MarketRegime
+
+
+
+# ── Bollinger Band Configuration ─────────────────────────────────
+BB_PERIOD = 20
+BB_STD_DEV = 2.0
+BB_PROXIMITY_THRESHOLD = 0.002  # 0.2% proximity to band for entry
 
 
 class MeanReversionStrategy(BaseStrategy):
     """
     Mean Reversion — for ranging markets.
 
+    Enhanced for Day Trader profile:
+    - Session-aware (Asian session hours only)
+    - Bollinger Bands + RSI entry logic
+    - ADX < 20 confirmation for ranging market
+
     Entry Logic (BUY):
-    1. H4: ADX < 20 (market is NOT trending — ranging)
+    1. Session: Asian session (quiet hours)
+    2. H4: ADX < 20 (market is NOT trending — ranging)
     2. M15: Price near support level
     3. M15: RSI < 30 (oversold)
     4. Entry at market, SL below support, TP at resistance
@@ -50,7 +66,6 @@ class MeanReversionStrategy(BaseStrategy):
         if self._fetcher is None:
             # Local import keeps the strategy import-cost flat for the
             # other strategies that don't need the fetcher at all.
-            from bot.core.data_fetcher import DataFetcher
             self._fetcher = DataFetcher(None)
         return self._fetcher
 

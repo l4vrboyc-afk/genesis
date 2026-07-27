@@ -7,7 +7,7 @@ __version__ = '1.0.0'
 
 datas = []
 binaries = []
-hiddenimports = ['webview.platforms.winforms']
+hiddenimports = []
 
 # Collect all pywebview assets (DLLs, .js, etc.)
 tmp_ret = collect_all('pywebview')

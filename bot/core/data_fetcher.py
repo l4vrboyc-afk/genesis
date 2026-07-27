@@ -3,12 +3,11 @@ Data Fetcher — Retrieves and processes market data from MT5.
 Handles candle data, tick data, and indicator calculations.
 """
 
-import asyncio
 import MetaTrader5 as mt5
 import pandas as pd
 import pandas_ta_classic as ta
 import numpy as np
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Optional
 from loguru import logger
 from bot.config.settings import settings, TIMEFRAME_MAP

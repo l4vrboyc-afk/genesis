@@ -57,7 +57,7 @@ leaves the bot alone.
 |---------|-------|-----|
 | Window never opens; "Could not find venv Python at..." flashes | `Genesis.exe` is in the wrong directory, or `.venv/` is missing | Move `Genesis.exe` to the project root, or rebuild the venv. |
 | Window shows "ERR_CONNECTION_REFUSED" / blank page | Bot crashed during boot | Check `logs/bot.log` and `logs/launcher.log` for the traceback. |
-| Bot errors with `10030 — Unsupported filling mode` | Pre-existing MT5 broker config issue — *not* the launcher | Set `MT5_ORDER_FILLING_MODE` or use `ORDER_FILLING_IOC` in `bot.config.settings`. |
+| Bot errors with `10030 — Unsupported filling mode` (or orders silently return `None`) | Broker symbol doesn't advertise the filling mode the bot requested | The bot now auto-selects a supported `type_filling` per symbol from `symbol_info.filling_mode` in `bot/core/order_manager.py` (`_choose_filling`), so this should be resolved. If it recurs, the new `❌ Order send returned None … (filling=…); <mt5.last_error()>` log line names the exact reason — send that line. |
 | Double-click triggers "Windows protected your PC" SmartScreen | PyInstaller binaries aren't code-signed | Right-click → Properties → "Unblock", or Properties → "Continue" through the SmartScreen dialog. |
 | Window closes but bot stays running (orphan) | Older launcher or window was force-killed | Use Task Manager → Details → end `python.exe`. |
 | Empty black window for >60 s | Backend didn't bind within deadline | See "ERR_CONNECTION_REFUSED" entry above; remove the `--noconsole` from the build temporarily to see live stdout. |

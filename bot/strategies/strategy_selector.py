@@ -1,13 +1,19 @@
 """
 Strategy Selector — Detects market regime and selects the right strategy.
 This is the brain's brain — it decides WHICH strategy to use based on conditions.
+
+For Day Trader profile, implements a 3×14 matrix approach:
+- 3 strategies evaluated per symbol
+- 14 currency pairs across multiple sessions
+- Session-aware routing prevents signal collisions
 """
 
 import numpy as np
 import pandas as pd
-from datetime import datetime
+from datetime import datetime, time
 from typing import Optional
 from loguru import logger
+from enum import Enum
 
 from bot.config.settings import settings, MarketRegime
 from bot.strategies.base_strategy import BaseStrategy, TradeSignal
@@ -15,6 +21,16 @@ from bot.strategies.smart_trend import SmartTrendStrategy
 from bot.strategies.mean_reversion import MeanReversionStrategy
 from bot.strategies.scalper_momentum import ScalperMomentumStrategy
 from bot.strategies.session_breakout import SessionBreakoutStrategy
+from bot.strategies.trend_engine import TrendEngineStrategy
+
+
+class SessionType(Enum):
+    """Market session classification for daytrader profile."""
+    ASIAN = "asian"
+    LONDON = "london"
+    NEW_YORK = "new_york"
+    OVERLAP = "overlap"
+    OUTSIDE = "outside"
 
 
 class StrategySelector:
@@ -56,6 +72,14 @@ class StrategySelector:
             self.strategies = {
                 MarketRegime.TRENDING: SessionBreakoutStrategy(),
                 MarketRegime.RANGING: SessionBreakoutStrategy(),
+            }
+        elif self.profile == "daytrader":
+            # Day Trader Profile - uses Trend Engine for trend following
+            # Note: Full day trader uses session-aware logic in TrendEngineStrategy
+            # Mean Reversion and Breakout strategies will be integrated in Phase 2
+            self.strategies = {
+                MarketRegime.TRENDING: TrendEngineStrategy(),
+                MarketRegime.RANGING: MeanReversionStrategy(),  # Placeholder for mean reversion
             }
         else:
             # Default Profile
@@ -226,9 +250,11 @@ class StrategySelector:
         # Breakout profile doesn't have VOLATILE mapped
         # Default profile doesn't have VOLATILE mapped
         skip_regimes = {MarketRegime.DEAD, MarketRegime.NEWS_EVENT}
-        if self.profile == "scalper":
-            skip_regimes.add(MarketRegime.VOLATILE)  # Scalper handles VOLATILE via its strategy
-        # For other profiles, VOLATILE is not in strategies dict so it falls through to "no strategy" anyway
+        # VOLATILE is NOT skipped for any profile: scalper has it mapped
+        # to ScalperMomentumStrategy (it's the best regime for momentum
+        # scalping). Default / breakout profiles don't have VOLATILE in
+        # their strategies dict, so it falls through to "no strategy"
+        # naturally — no explicit skip needed.
 
         if regime in skip_regimes:
             logger.info(
@@ -253,6 +279,110 @@ class StrategySelector:
         # off symbol.
 
         return signal
+
+    # ── Day Trader Multi-Strategy Evaluation ─────────────────────────────
+    # For the daytrader profile, evaluate all 3 strategies and return best signal
+
+    def _get_session_from_time(self) -> SessionType:
+        """Determine current market session based on UTC time."""
+        now = datetime.utcnow().time()
+
+        # Asian: 00:00 - 07:00 UTC
+        if time(0, 0) <= now < time(7, 0):
+            return SessionType.ASIAN
+
+        # London: 07:00 - 12:00 UTC
+        if time(7, 0) <= now < time(12, 0):
+            return SessionType.LONDON
+
+        # Overlap: 12:00 - 16:00 UTC (London-NY overlap)
+        if time(12, 0) <= now < time(16, 0):
+            return SessionType.OVERLAP
+
+        # New York: 16:00 - 20:00 UTC
+        if time(16, 0) <= now < time(20, 0):
+            return SessionType.NEW_YORK
+
+        # Outside all sessions: 20:00 - 00:00 UTC
+        return SessionType.OUTSIDE
+
+    def _is_opening_window(self, session: SessionType) -> bool:
+        """Check if we're in the opening window of a session (0-30 min)."""
+        now = datetime.utcnow().time()
+
+        if session == SessionType.LONDON:
+            # London opens at 07:00 UTC
+            return time(7, 0) <= now < time(7, 30)
+        elif session == SessionType.NEW_YORK:
+            # NY opens at 12:00 UTC
+            return time(12, 0) <= now < time(12, 30)
+
+        return False
+
+    def evaluate_daytrader_signals(
+        self,
+        symbol: str,
+        htf_data: pd.DataFrame,
+        etf_data: pd.DataFrame,
+        current_price: dict,
+    ) -> Optional[TradeSignal]:
+        """
+        Evaluate all 3 strategies for daytrader profile.
+
+        The 3×14 Matrix:
+        - Strategy B: Mean Reversion (Asian Session / Range Gate)
+        - Strategy C: Session Breakout (London/NY Opens)
+        - Strategy A: Trend Engine (London & NY Main Sessions)
+
+        Returns the best signal found, or None if no valid signal.
+        """
+        if self.profile != "daytrader":
+            return None
+
+        # Get session state
+        session = self._get_session_from_time()
+
+        # Initialize strategies
+        trend_strategy = TrendEngineStrategy()
+        breakout_strategy = SessionBreakoutStrategy()
+        mean_reversion_strategy = MeanReversionStrategy()
+
+        signals = []
+
+        # ── Strategy B: Mean Reversion (Asian Session Only) ──────────
+        if session == SessionType.ASIAN:
+            signal = mean_reversion_strategy.generate_signal(
+                symbol, htf_data, etf_data, current_price
+            )
+            if signal:
+                logger.info(f"[DAYTRADER] MeanReversion signal: {signal}")
+                signals.append(signal)
+
+        # ── Strategy C: Session Breakout (Opening Windows) ───────────
+        if self._is_opening_window(session):
+            signal = breakout_strategy.generate_signal(
+                symbol, htf_data, etf_data, current_price
+            )
+            if signal:
+                logger.info(f"[DAYTRADER] Breakout signal: {signal}")
+                signals.append(signal)
+
+        # ── Strategy A: Trend Engine (London/NY Sessions) ─────────────
+        if session in (SessionType.LONDON, SessionType.NEW_YORK, SessionType.OVERLAP):
+            signal = trend_strategy.generate_signal(
+                symbol, htf_data, etf_data, current_price
+            )
+            if signal:
+                logger.info(f"[DAYTRADER] TrendEngine signal: {signal}")
+                signals.append(signal)
+
+        # Return best signal (highest confidence, then highest R:R)
+        if signals:
+            # Sort by confidence first, then by risk_reward_ratio
+            best_signal = max(signals, key=lambda s: (s.confidence, s.risk_reward_ratio))
+            return best_signal
+
+        return None
 
     def force_regime(self, regime: MarketRegime):
         """Manually override the regime (e.g., for news events)."""
