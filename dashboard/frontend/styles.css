@@ -921,3 +921,67 @@ body {
   accent-color: #5865f2;
   cursor: pointer;
 }
+
+/* Gateway Evaluator Mini Component */
+.gateway-evaluator-bar {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  padding: 10px;
+  margin: 10px 0;
+}
+
+.gateway-title {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: #94a3b8;
+  margin-bottom: 6px;
+}
+
+.gateway-dots {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 6px;
+}
+
+.gate-pill {
+  text-align: center;
+  padding: 4px 0;
+  font-size: 0.68rem;
+  font-weight: 800;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.05);
+  color: #64748b;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  transition: all 0.25s ease;
+}
+
+/* Passed Gate State */
+.gate-pill.passed {
+  background: rgba(74, 222, 128, 0.2);
+  color: #4ade80;
+  border-color: rgba(74, 222, 128, 0.5);
+  box-shadow: 0 0 8px rgba(74, 222, 128, 0.2);
+}
+
+/* Failed Gate State */
+.gate-pill.failed {
+  background: rgba(248, 113, 113, 0.2);
+  color: #f87171;
+  border-color: rgba(248, 113, 113, 0.5);
+}
+
+.gate-status-text.neutral {
+  color: #64748b;
+}
+.gate-status-text.ready {
+  color: #4ade80;
+}
+.gate-status-text.warning {
+  color: #facc15;
+}
+.gate-status-text.blocked {
+  color: #f87171;
+}

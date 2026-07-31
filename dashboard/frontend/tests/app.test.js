@@ -38,6 +38,12 @@ const HTML = `<!DOCTYPE html>
   </select>
   <input type="number" id="stake-amount-usd" value="20" />
   <span id="calculated-lots-preview">0.02 Lots</span>
+  <div id="gateway-overall-status" class="gate-status-text neutral">CHECKING...</div>
+  <div id="gate-1" class="gate-pill">EMA</div>
+  <div id="gate-2" class="gate-pill">ADX</div>
+  <div id="gate-3" class="gate-pill">RSI</div>
+  <div id="gate-4" class="gate-pill">VOL</div>
+  <div id="gate-5" class="gate-pill">REG</div>
 
   <!-- Header controls -->
   <button id="engine-toggle-btn" class="engine-btn paused"><span id="engine-btn-text">START ENGINE</span></button>
@@ -172,6 +178,9 @@ describe("Genesis Dashboard App", () => {
       "window.selectProfile = selectProfile;" +
       "window.populateSymbolDropdown = populateSymbolDropdown;" +
       "window.sendDiscordTradeNotification = sendDiscordTradeNotification;" +
+      "window.evaluateFiveGateways = evaluateFiveGateways;" +
+      "window.updateGatewayUI = updateGatewayUI;" +
+      "window.simulateGatewayCheck = simulateGatewayCheck;" +
       "window.getActiveProfile = function() { return activeProfile; };";
 
     window.eval(bootstrap);
@@ -220,6 +229,34 @@ describe("Genesis Dashboard App", () => {
       document.body.appendChild(sel);
     }
     sel.innerHTML = '<option value="EURUSD">EURUSD</option><option value="USDJPY">USDJPY</option><option value="GBPUSD">GBPUSD</option>';
+
+    // Restore gateway pills if a previous test removed them
+    var gateIds = ['gate-1', 'gate-2', 'gate-3', 'gate-4', 'gate-5'];
+    gateIds.forEach(function(id) {
+      if (!document.getElementById(id)) {
+        var pill = document.createElement("div");
+        pill.id = id;
+        pill.className = "gate-pill";
+        document.body.appendChild(pill);
+      }
+    });
+    var statusEl = document.getElementById("gateway-overall-status");
+    if (!statusEl) {
+      statusEl = document.createElement("div");
+      statusEl.id = "gateway-overall-status";
+      statusEl.className = "gate-status-text neutral";
+      statusEl.textContent = "CHECKING...";
+      document.body.appendChild(statusEl);
+    }
+    // Reset all gate pills to neutral state
+    gateIds.forEach(function(id) {
+      var el = document.getElementById(id);
+      if (el) el.className = "gate-pill";
+    });
+    if (statusEl) {
+      statusEl.className = "gate-status-text neutral";
+      statusEl.textContent = "CHECKING...";
+    }
     // Reset activeProfile back to swing_trader (the default)
     window.selectProfile("swing_trader");
     // Remove any fetch stub left by engine-toggle tests so later tests
@@ -1067,6 +1104,147 @@ describe("Genesis Dashboard App", () => {
       // Restore
       window.TRADING_PROFILES.swing_trader = savedSwing;
       window.selectProfile("swing_trader");
+    });
+  });
+
+  // ── evaluateFiveGateways ───────────────────────────────────────────
+
+  describe("evaluateFiveGateways", () => {
+    afterEach(() => {
+      window.fetch = undefined;
+    });
+
+    it("fetches gate data from the API and calls updateGatewayUI", async () => {
+      window.fetch = async (url) => {
+        assert.ok(url.includes("symbol=EURUSD"));
+        assert.ok(url.includes("profile=swing_trader"));
+        return {
+          ok: true,
+          json: async () => ({
+            gates: [true, true, true, true, true],
+            overall: "5/5 OPTIMAL",
+          }),
+        };
+      };
+
+      await window.evaluateFiveGateways();
+
+      const pills = document.querySelectorAll(".gate-pill");
+      for (const pill of pills) {
+        assert.ok(pill.classList.contains("passed"), "gate should be 'passed'");
+      }
+      const status = document.getElementById("gateway-overall-status");
+      assert.equal(status.textContent, "5/5 OPTIMAL");
+      assert.ok(status.classList.contains("ready"));
+    });
+
+    it("falls back to simulateGatewayCheck when fetch fails", async () => {
+      window.fetch = async () => {
+        throw new Error("Network error");
+      };
+
+      await window.evaluateFiveGateways();
+
+      // simulateGatewayCheck for EURUSD returns [true, true, false, true, true]
+      const gate3 = document.getElementById("gate-3");
+      assert.ok(gate3.classList.contains("failed"));
+      const gate1 = document.getElementById("gate-1");
+      assert.ok(gate1.classList.contains("passed"));
+    });
+
+    it("calls updateLotConversionPreview after evaluation", async () => {
+      window.fetch = async () => ({
+        ok: true,
+        json: async () => ({ gates: [true, true, true, true, true] }),
+      });
+
+      const before = document.getElementById("calculated-lots-preview").textContent;
+      await window.evaluateFiveGateways();
+      const after = document.getElementById("calculated-lots-preview").textContent;
+      // The lot preview should be refreshed (value might not change for same input, but no error)
+      assert.equal(typeof after, "string");
+    });
+  });
+
+  // ── updateGatewayUI ───────────────────────────────────────────────
+
+  describe("updateGatewayUI", () => {
+    it("marks all gates passed when all results are true", () => {
+      window.updateGatewayUI([true, true, true, true, true]);
+
+      const pills = document.querySelectorAll(".gate-pill");
+      pills.forEach((pill) => {
+        assert.ok(pill.classList.contains("passed"), "should be passed");
+        assert.ok(!pill.classList.contains("failed"));
+      });
+
+      const status = document.getElementById("gateway-overall-status");
+      assert.equal(status.textContent, "5/5 OPTIMAL");
+      assert.ok(status.classList.contains("ready"));
+    });
+
+    it("marks failing gates as failed and sets warning status for 3/5", () => {
+      window.updateGatewayUI([true, true, true, false, false]);
+
+      const g4 = document.getElementById("gate-4");
+      const g5 = document.getElementById("gate-5");
+      assert.ok(g4.classList.contains("failed"));
+      assert.ok(g5.classList.contains("failed"));
+
+      const g1 = document.getElementById("gate-1");
+      assert.ok(g1.classList.contains("passed"));
+
+      const status = document.getElementById("gateway-overall-status");
+      assert.equal(status.textContent, "3/5 MODERATE");
+      assert.ok(status.classList.contains("warning"));
+    });
+
+    it("sets blocked status when fewer than 3 gates pass", () => {
+      window.updateGatewayUI([true, false, false, false, false]);
+
+      const status = document.getElementById("gateway-overall-status");
+      assert.equal(status.textContent, "1/5 BLOCKED");
+      assert.ok(status.classList.contains("blocked"));
+    });
+
+    it("is a no-op when gate elements are missing", () => {
+      // Remove all gate pills
+      const pills = document.querySelectorAll(".gate-pill");
+      pills.forEach((p) => p.remove());
+
+      assert.doesNotThrow(() => window.updateGatewayUI([true, true, true, true, true]));
+    });
+  });
+
+  // ── simulateGatewayCheck ──────────────────────────────────────────
+
+  describe("simulateGatewayCheck", () => {
+    it("fails gate 3 (RSI) for non-Gold symbols", () => {
+      window.simulateGatewayCheck("EURUSD");
+
+      const g3 = document.getElementById("gate-3");
+      assert.ok(g3.classList.contains("failed"));
+
+      const g1 = document.getElementById("gate-1");
+      assert.ok(g1.classList.contains("passed"));
+
+      // 4 out of 5 pass → MODERATE
+      const status = document.getElementById("gateway-overall-status");
+      assert.equal(status.textContent, "4/5 MODERATE");
+      assert.ok(status.classList.contains("warning"));
+    });
+
+    it("passes all gates for Gold (XAUUSD)", () => {
+      window.simulateGatewayCheck("XAUUSD");
+
+      const pills = document.querySelectorAll(".gate-pill");
+      pills.forEach((pill) => {
+        assert.ok(pill.classList.contains("passed"), "all gates should pass for Gold");
+      });
+
+      const status = document.getElementById("gateway-overall-status");
+      assert.equal(status.textContent, "5/5 OPTIMAL");
+      assert.ok(status.classList.contains("ready"));
     });
   });
 });

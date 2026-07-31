@@ -116,10 +116,11 @@
         <div class="grid grid-cols-2 gap-3">
           <div>
             <label class="text-[11px] text-zinc-400 block mb-1 uppercase">Symbol</label>
-            <select id="stake-symbol" class="glass-select w-full p-2 text-xs font-bold font-mono">
+            <select id="stake-symbol" class="glass-select w-full p-2 text-xs font-bold font-mono" onchange="evaluateFiveGateways()">
               <option value="EURUSD">EURUSD</option>
               <option value="USDJPY">USDJPY</option>
               <option value="GBPUSD">GBPUSD</option>
+              <option value="XAUUSD">XAUUSD</option>
             </select>
           </div>
           <div>
@@ -134,6 +135,21 @@
                 class="glass-input w-full p-2 pl-6 text-xs font-bold mono-num"
               />
             </div>
+          </div>
+        </div>
+
+        <!-- Five Gateway Evaluator Status Bar -->
+        <div class="gateway-evaluator-bar">
+          <div class="gateway-title">
+            <span>FIVE GATEWAY EVALUATOR</span>
+            <span id="gateway-overall-status" class="gate-status-text neutral">CHECKING...</span>
+          </div>
+          <div class="gateway-dots">
+            <div id="gate-1" class="gate-pill" title="Gate 1: EMA Trend Alignment">EMA</div>
+            <div id="gate-2" class="gate-pill" title="Gate 2: ADX Volatility Gate">ADX</div>
+            <div id="gate-3" class="gate-pill" title="Gate 3: RSI Momentum Window">RSI</div>
+            <div id="gate-4" class="gate-pill" title="Gate 4: Volume &amp; Liquidity Surge">VOL</div>
+            <div id="gate-5" class="gate-pill" title="Gate 5: Market Regime Filter">REG</div>
           </div>
         </div>
 
