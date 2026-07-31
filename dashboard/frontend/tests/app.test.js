@@ -12,7 +12,7 @@
  * Watch: npm run test:watch
  */
 
-const { describe, it, before, beforeEach } = require("node:test");
+const { describe, it, before, beforeEach, afterEach } = require("node:test");
 const assert = require("node:assert/strict");
 const { JSDOM } = require("jsdom");
 const fs = require("fs");
@@ -167,7 +167,12 @@ describe("Genesis Dashboard App", () => {
       "window.setPosChartTF = setPosChartTF;" +
       "window.refreshPositionChart = refreshPositionChart;" +
       "window.patchPositionChartTick = patchPositionChartTick;" +
-      "window.loadCandles = loadCandles;";
+      "window.loadCandles = loadCandles;" +
+      "window.TRADING_PROFILES = TRADING_PROFILES;" +
+      "window.selectProfile = selectProfile;" +
+      "window.populateSymbolDropdown = populateSymbolDropdown;" +
+      "window.sendDiscordTradeNotification = sendDiscordTradeNotification;" +
+      "window.getActiveProfile = function() { return activeProfile; };";
 
     window.eval(bootstrap);
 
@@ -207,6 +212,16 @@ describe("Genesis Dashboard App", () => {
     // Clear webhook input
     const wh = document.getElementById("discord-webhook-url");
     if (wh) wh.value = "";
+    // Reset stake-symbol to default options (re-create if a previous test removed it)
+    let sel = document.getElementById("stake-symbol");
+    if (!sel) {
+      sel = document.createElement("select");
+      sel.id = "stake-symbol";
+      document.body.appendChild(sel);
+    }
+    sel.innerHTML = '<option value="EURUSD">EURUSD</option><option value="USDJPY">USDJPY</option><option value="GBPUSD">GBPUSD</option>';
+    // Reset activeProfile back to swing_trader (the default)
+    window.selectProfile("swing_trader");
     // Remove any fetch stub left by engine-toggle tests so later tests
     // (history modal) observe the jsdom default (no fetch).
     window.fetch = undefined;
@@ -829,6 +844,229 @@ describe("Genesis Dashboard App", () => {
 
       assert.ok(document.getElementById("discord-status-badge").classList.contains("discord-disconnected"));
       assert.equal(document.getElementById("discord-status-text").textContent, "DISCORD: OFF");
+    });
+  });
+
+  // ── Trading Profiles ───────────────────────────────────────────────
+
+  describe("TRADING_PROFILES", () => {
+    it("defines all four profiles with correct metadata", () => {
+      assert.ok(window.TRADING_PROFILES.swing_trader);
+      assert.ok(window.TRADING_PROFILES.range_scalper);
+      assert.ok(window.TRADING_PROFILES.breakout_hunter);
+      assert.ok(window.TRADING_PROFILES.day_trader);
+
+      assert.equal(window.TRADING_PROFILES.swing_trader.name, "Swing Trader");
+      assert.equal(window.TRADING_PROFILES.range_scalper.name, "Range Fade Scalper");
+      assert.equal(window.TRADING_PROFILES.breakout_hunter.name, "Breakout Hunter");
+      assert.equal(window.TRADING_PROFILES.day_trader.name, "Universal Day Trader");
+    });
+
+    it("includes XAUUSD (Gold) in every profile's pair list", () => {
+      for (const key of Object.keys(window.TRADING_PROFILES)) {
+        const pairs = window.TRADING_PROFILES[key].pairs;
+        assert.ok(pairs.includes("XAUUSD"), "Profile " + key + " should include XAUUSD");
+      }
+    });
+
+    it("has correct pair counts", () => {
+      assert.equal(window.TRADING_PROFILES.swing_trader.pairs.length, 17);
+      assert.equal(window.TRADING_PROFILES.range_scalper.pairs.length, 17);
+      assert.equal(window.TRADING_PROFILES.breakout_hunter.pairs.length, 18);
+      assert.equal(window.TRADING_PROFILES.day_trader.pairs.length, 23);
+    });
+
+    it("has profile-specific riskPerTrade and goldStopMultiplier", () => {
+      assert.equal(window.TRADING_PROFILES.swing_trader.riskPerTrade, 0.01);
+      assert.equal(window.TRADING_PROFILES.swing_trader.goldStopMultiplier, 2.5);
+      assert.equal(window.TRADING_PROFILES.range_scalper.riskPerTrade, 0.005);
+      assert.equal(window.TRADING_PROFILES.range_scalper.goldStopMultiplier, 0.8);
+      assert.equal(window.TRADING_PROFILES.breakout_hunter.riskPerTrade, 0.015);
+      assert.equal(window.TRADING_PROFILES.breakout_hunter.goldStopMultiplier, 1.8);
+      assert.equal(window.TRADING_PROFILES.day_trader.riskPerTrade, 0.01);
+      assert.equal(window.TRADING_PROFILES.day_trader.goldStopMultiplier, 1.5);
+    });
+  });
+
+  // ── populateSymbolDropdown ─────────────────────────────────────────
+
+  describe("populateSymbolDropdown", () => {
+    it("repopulates stake-symbol options with the given pairs", () => {
+      const pairs = ["EURUSD", "XAUUSD", "GBPUSD"];
+      window.populateSymbolDropdown(pairs);
+
+      const select = document.getElementById("stake-symbol");
+      const options = select.querySelectorAll("option");
+      assert.equal(options.length, 3);
+      assert.equal(options[0].value, "EURUSD");
+      assert.equal(options[1].value, "XAUUSD");
+      assert.equal(options[2].value, "GBPUSD");
+    });
+
+    it("labels XAUUSD as (Gold)", () => {
+      window.populateSymbolDropdown(["XAUUSD"]);
+
+      const select = document.getElementById("stake-symbol");
+      const opt = select.querySelector("option");
+      assert.equal(opt.value, "XAUUSD");
+      assert.ok(opt.textContent.includes("Gold"));
+    });
+
+    it("is a no-op when select element is missing", () => {
+      document.body.removeChild(document.getElementById("stake-symbol"));
+      assert.doesNotThrow(() => window.populateSymbolDropdown(["EURUSD"]));
+    });
+  });
+
+  // ── selectProfile ──────────────────────────────────────────────────
+
+  describe("selectProfile", () => {
+    it("sets activeProfile, saves to localStorage, and populates dropdown", () => {
+      window.selectProfile("swing_trader");
+
+      assert.equal(window.getActiveProfile(), "swing_trader");
+      assert.equal(window.localStorage.getItem("genesis_active_profile"), "swing_trader");
+
+      const options = document.getElementById("stake-symbol").querySelectorAll("option");
+      assert.ok(options.length > 0);
+      const values = Array.from(options).map(o => o.value);
+      assert.ok(values.includes("EURUSD"));
+      assert.ok(values.includes("XAUUSD"));
+    });
+
+    it("switches to a different profile", () => {
+      window.selectProfile("breakout_hunter");
+
+      assert.equal(window.getActiveProfile(), "breakout_hunter");
+      assert.equal(window.localStorage.getItem("genesis_active_profile"), "breakout_hunter");
+
+      const options = document.getElementById("stake-symbol").querySelectorAll("option");
+      assert.ok(options.length > 0);
+    });
+
+    it("ignores unknown profile keys", () => {
+      window.selectProfile("nonexistent_profile");
+
+      // activeProfile should remain "swing_trader" (set by beforeEach)
+      assert.equal(window.getActiveProfile(), "swing_trader");
+      // localStorage should still have "swing_trader", not "nonexistent_profile"
+      assert.equal(window.localStorage.getItem("genesis_active_profile"), "swing_trader");
+    });
+
+    it("persists active profile across profile switches", () => {
+      window.selectProfile("scalper");
+      window.selectProfile("day_trader");
+
+      assert.equal(window.getActiveProfile(), "day_trader");
+      assert.equal(window.localStorage.getItem("genesis_active_profile"), "day_trader");
+    });
+  });
+
+  // ── sendDiscordTradeNotification ───────────────────────────────────
+
+  describe("sendDiscordTradeNotification", () => {
+    afterEach(() => {
+      window.fetch = undefined;
+    });
+
+    it("sends a POST fetch with profile name and embed to the webhook URL", async () => {
+      window.localStorage.setItem("discord_webhook_url", "https://discord.com/api/webhooks/test/abc");
+      window.selectProfile("swing_trader");
+
+      let captured = null;
+      window.fetch = async (url, opts) => {
+        captured = { url: url, opts: opts };
+        return { ok: true };
+      };
+
+      await window.sendDiscordTradeNotification({
+        type: "BUY",
+        symbol: "EURUSD",
+        lots: 0.02,
+        price: 1.0850,
+      });
+
+      assert.ok(captured);
+      assert.equal(captured.url, "https://discord.com/api/webhooks/test/abc");
+      assert.equal(captured.opts.method, "POST");
+      assert.equal(captured.opts.headers["Content-Type"], "application/json");
+
+      const body = JSON.parse(captured.opts.body);
+      assert.ok(body.embeds && body.embeds.length === 1);
+      assert.equal(body.embeds[0].title, "📊 BUY Order Executed (Swing Trader)");
+      assert.equal(body.embeds[0].color, 0x4ade80);
+
+      const fields = body.embeds[0].fields;
+      const profField = fields.find(f => f.name === "Active Profile");
+      assert.equal(profField.value, "Swing Trader");
+    });
+
+    it("tags Gold (XAUUSD) executions with the gold icon", () => {
+      window.localStorage.setItem("discord_webhook_url", "https://discord.com/api/webhooks/test/abc");
+      window.selectProfile("range_scalper");
+
+      let captured = null;
+      window.fetch = async (url, opts) => {
+        captured = { url: url, opts: opts };
+        return { ok: true };
+      };
+
+      window.sendDiscordTradeNotification({
+        type: "SELL",
+        symbol: "XAUUSD",
+        lots: 0.5,
+        price: 2350.50,
+      });
+
+      const body = JSON.parse(captured.opts.body);
+      assert.equal(body.embeds[0].title, "🏆 [GOLD] SELL Order Executed (Range Fade Scalper)");
+      assert.equal(body.embeds[0].color, 0xf87171);
+    });
+
+    it("warns and returns when no webhook URL is configured", () => {
+      window.localStorage.removeItem("discord_webhook_url");
+      window.selectProfile("breakout_hunter");
+
+      let fetchCalled = false;
+      window.fetch = async () => { fetchCalled = true; };
+
+      window.sendDiscordTradeNotification({
+        type: "BUY",
+        symbol: "GBPJPY",
+        lots: 0.1,
+        price: 185.30,
+      });
+
+      assert.ok(!fetchCalled, "fetch should not be called without a webhook URL");
+    });
+
+    it("uses the default profile name when activeProfile is not in TRADING_PROFILES", () => {
+      window.localStorage.setItem("discord_webhook_url", "https://discord.com/api/webhooks/test/abc");
+
+      // Temporarily make swing_trader unknown to trigger the fallback
+      const savedSwing = window.TRADING_PROFILES.swing_trader;
+      delete window.TRADING_PROFILES.swing_trader;
+      window.selectProfile("swing_trader"); // will not change activeProfile since key is deleted
+
+      let captured = null;
+      window.fetch = async (url, opts) => {
+        captured = { url: url, opts: opts };
+        return { ok: true };
+      };
+
+      window.sendDiscordTradeNotification({
+        type: "BUY",
+        symbol: "AUDUSD",
+        lots: 0.05,
+        price: 0.6650,
+      });
+
+      const body = JSON.parse(captured.opts.body);
+      assert.equal(body.embeds[0].title, "📊 BUY Order Executed (Genesis Engine)");
+
+      // Restore
+      window.TRADING_PROFILES.swing_trader = savedSwing;
+      window.selectProfile("swing_trader");
     });
   });
 });

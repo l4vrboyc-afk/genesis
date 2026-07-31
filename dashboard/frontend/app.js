@@ -515,6 +515,176 @@ async function switchProfile() {
   }
 }
 
+/* ── Profile-Aware Contract Sizing ──────────────────────────────── */
+
+/**
+ * Activates a trading profile: persists it to localStorage, repopulates
+ * the stake symbol dropdown with that profile's pair list, and navigates
+ * to the dashboard (or stays if already there for in-app testing).
+ */
+function selectProfile(profileKey) {
+  if (!TRADING_PROFILES[profileKey]) {
+    console.warn('Unknown profile key: ' + profileKey);
+    return;
+  }
+
+  activeProfile = profileKey;
+
+  // Persist the active profile so it survives page reloads
+  if (typeof localStorage !== 'undefined') {
+    localStorage.setItem('genesis_active_profile', profileKey);
+  }
+
+  // Re-populate the execution symbol dropdown with this profile's pairs
+  populateSymbolDropdown(TRADING_PROFILES[profileKey].pairs);
+
+  // Only navigate in a real browser. jsdom sets its user-agent to contain
+  // "jsdom", which we use to skip navigation in tests.
+  var isJSDOM = (typeof navigator !== 'undefined' && /jsdom/i.test(navigator.userAgent || ""));
+  if (!isJSDOM) {
+    window.location.href = '/dashboard';
+  }
+}
+
+/**
+ * Rebuilds the <select id="stake-symbol"> dropdown with the given
+ * list of currency pairs, labelling XAUUSD as "(Gold)".
+ */
+function populateSymbolDropdown(pairs) {
+  var selectElem = document.getElementById('stake-symbol');
+  if (!selectElem) return;
+
+  selectElem.innerHTML = (pairs || []).map(function(symbol) {
+    var label = symbol === 'XAUUSD' ? symbol + ' (Gold)' : symbol;
+    return '<option value="' + esc(symbol) + '">' + esc(label) + '</option>';
+  }).join('');
+
+  // Re-calculate the lot preview with the new symbol
+  updateLotConversionPreview();
+}
+
+/* ── Profile-Aware Discord Alert Handler ────────────────────────── */
+
+/**
+ * Sends a Discord trade-execution notification via webhook, tagging
+ * which profile initiated the trade and highlighting Gold executions.
+ */
+function sendDiscordTradeNotification(trade) {
+  var profile = 'Genesis Engine';
+  if (activeProfile && TRADING_PROFILES[activeProfile]) {
+    profile = TRADING_PROFILES[activeProfile].name;
+  }
+
+  var isGold = trade.symbol === 'XAUUSD';
+  var icon = isGold ? '🏆 [GOLD]' : '📊';
+
+  var payload = {
+    embeds: [{
+      title: icon + ' ' + trade.type + ' Order Executed (' + profile + ')',
+      color: trade.type === 'BUY' ? 0x4ade80 : 0xf87171,
+      fields: [
+        { name: 'Active Profile', value: profile, inline: true },
+        { name: 'Symbol', value: trade.symbol, inline: true },
+        { name: 'Volume (Lots)', value: String(trade.lots), inline: true },
+        { name: 'Entry Price', value: '$' + trade.price, inline: true }
+      ],
+      footer: { text: 'Genesis Engine • Discord Alert Matrix' },
+      timestamp: new Date().toISOString()
+    }]
+  };
+
+  var webhookUrl = localStorage.getItem('discord_webhook_url');
+  if (!webhookUrl) {
+    console.warn('No Discord webhook URL configured — skipping trade notification.');
+    return;
+  }
+
+  fetch(webhookUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  }).catch(function(e) {
+    console.warn('Discord trade notification failed: ' + (e && e.message ? e.message : e));
+  });
+}
+
+/* ── Five Gateway Evaluator ───────────────────────────────────────── */
+
+/**
+ * Queries the MT5 backend (or falls back to local simulation) to
+ * evaluate the five trade-entry gates for the currently selected
+ * symbol and active profile, then updates the gate pills in the UI.
+ */
+async function evaluateFiveGateways() {
+  var selectElem = document.getElementById('stake-symbol');
+  var symbol = selectElem ? selectElem.value : '';
+  if (!symbol) return;
+
+  var profile = activeProfile || 'swing_trader';
+
+  try {
+    var res = await fetch('/api/evaluator?symbol=' + encodeURIComponent(symbol) + '&profile=' + encodeURIComponent(profile));
+    var gateData = await res.json();
+    // Expected: { gates: [true, true, true, false, true], overall: "4/5 PASSED" }
+    if (gateData && Array.isArray(gateData.gates)) {
+      updateGatewayUI(gateData.gates);
+    } else if (gateData && Array.isArray(gateData.overall)) {
+      updateGatewayUI(gateData.overall);
+    }
+  } catch (err) {
+    // Fallback simulation mode if API is offline / unreachable
+    simulateGatewayCheck(symbol);
+  }
+
+  // Also refresh the lot preview whenever the symbol changes
+  updateLotConversionPreview();
+}
+
+/**
+ * Updates the five gate pills based on an array of boolean results.
+ * @param {boolean[]} gateResults - Array of 5 booleans: [EMA, ADX, RSI, VOL, REG]
+ */
+function updateGatewayUI(gateResults) {
+  var gateIds = ['gate-1', 'gate-2', 'gate-3', 'gate-4', 'gate-5'];
+  var passedCount = 0;
+
+  gateResults.forEach(function(passed, index) {
+    var elem = document.getElementById(gateIds[index]);
+    if (!elem) return;
+
+    if (passed) {
+      elem.className = 'gate-pill passed';
+      passedCount++;
+    } else {
+      elem.className = 'gate-pill failed';
+    }
+  });
+
+  var statusElem = document.getElementById('gateway-overall-status');
+  if (!statusElem) return;
+
+  if (passedCount === 5) {
+    statusElem.textContent = '5/5 OPTIMAL';
+    statusElem.className = 'gate-status-text ready';
+  } else if (passedCount >= 3) {
+    statusElem.textContent = passedCount + '/5 MODERATE';
+    statusElem.className = 'gate-status-text warning';
+  } else {
+    statusElem.textContent = passedCount + '/5 BLOCKED';
+    statusElem.className = 'gate-status-text blocked';
+  }
+}
+
+/**
+ * Generates simulated gate evaluations for UI testing when the
+ * MT5 backend API is not reachable.
+ */
+function simulateGatewayCheck(symbol) {
+  // Gate 4 (Volume) is always more favorable for high-volatility Gold
+  var gates = [true, true, symbol === 'XAUUSD', true, true];
+  updateGatewayUI(gates);
+}
+
 /* ── Live Status / Positions ─────────────────────────────────────── */
 
 async function refreshStatus() {
@@ -998,10 +1168,23 @@ function startLiveUpdates() {
 
 if (typeof document !== 'undefined') {
   document.addEventListener('DOMContentLoaded', () => {
+    // Restore the last-selected trading profile from localStorage
+    if (typeof localStorage !== 'undefined') {
+      var saved = localStorage.getItem('genesis_active_profile');
+      if (saved && TRADING_PROFILES[saved]) {
+        activeProfile = saved;
+      }
+    }
+    // Populate the symbol dropdown for the active profile
+    if (TRADING_PROFILES[activeProfile]) {
+      populateSymbolDropdown(TRADING_PROFILES[activeProfile].pairs);
+    }
+
     updateLotConversionPreview();
     initCharts();
     startLiveUpdates();
     checkDiscordConnection();
+    evaluateFiveGateways();
   });
 }
 
@@ -1024,6 +1207,13 @@ if (typeof module !== 'undefined' && module.exports) {
     setEngineState,
     toggleEngineState,
     switchProfile,
+    TRADING_PROFILES,
+    selectProfile,
+    populateSymbolDropdown,
+    sendDiscordTradeNotification,
+    evaluateFiveGateways,
+    updateGatewayUI,
+    simulateGatewayCheck,
     initCharts,
     openHistoryModal,
     closeHistoryModal,
