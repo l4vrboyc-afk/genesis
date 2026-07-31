@@ -3,6 +3,10 @@
 Monkeypatches FRONTEND_SRC / CHECK_JS to temp dirs so we can verify the
 success path AND each failure path (missing entry, missing asset, broken
 JS, missing frontend dir) without touching the real source tree.
+
+Each temp-dir scenario runs inside a ``TemporaryDirectory`` context manager
+so the directory is removed automatically when the block exits — no leaked
+temp dirs across runs.
 """
 from __future__ import annotations
 
@@ -20,9 +24,17 @@ bd = importlib.util.module_from_spec(spec)
 assert spec.loader is not None
 spec.loader.exec_module(bd)
 
+# The real source values, captured once so every test restores them.
+ORIG_SRC = bd.FRONTEND_SRC
+ORIG_CHECK = bd.CHECK_JS
 
-def _make_frontend(files: dict[str, str], check_js: str | None) -> Path:
-    tmp = Path(tempfile.mkdtemp())
+
+def _populate_frontend(tmp: Path, files: dict[str, str], check_js: str | None) -> Path:
+    """Write the given files (and optional fake check_js.py) into *tmp*.
+
+    *tmp* must already exist (created by the caller's TemporaryDirectory).
+    Returns *tmp* so callers can point ``bd.FRONTEND_SRC`` at it.
+    """
     for name, content in files.items():
         p = tmp / name
         p.parent.mkdir(parents=True, exist_ok=True)
@@ -45,54 +57,58 @@ rc = bd.verify_frontend()
 check("real frontend success", rc, 0)
 
 # 2. Missing frontend dir entirely.
-orig_src, orig_check = bd.FRONTEND_SRC, bd.CHECK_JS
-missing_dir = Path(tempfile.mkdtemp()) / "does_not_exist"
-bd.FRONTEND_SRC = missing_dir
-rc = bd.verify_frontend()
-check("missing dir", rc, 1)
-bd.FRONTEND_SRC, bd.CHECK_JS = orig_src, orig_check
+with tempfile.TemporaryDirectory() as tmp:
+    bd.FRONTEND_SRC = Path(tmp) / "does_not_exist"
+    rc = bd.verify_frontend()
+    check("missing dir", rc, 1)
+bd.FRONTEND_SRC, bd.CHECK_JS = ORIG_SRC, ORIG_CHECK
 
 # 3. Missing entry file (styles.css).
 # CHECK_JS is pointed at a non-existent path so the subprocess step is
 # skipped without setting it to None (which would crash the None-guarded
 # CHECK_JS.is_file() check if that guard were ever removed).
-bd.FRONTEND_SRC = _make_frontend(
-    {"index.html": "<html></html>", "app.js": "const a = 1;"}, None
-)
-bd.CHECK_JS = bd.FRONTEND_SRC / "nope"
-rc = bd.verify_frontend()
-check("missing entry", rc, 1)
-bd.FRONTEND_SRC, bd.CHECK_JS = orig_src, orig_check
+with tempfile.TemporaryDirectory() as tmp:
+    bd.FRONTEND_SRC = _populate_frontend(
+        Path(tmp), {"index.html": "<html></html>", "app.js": "const a = 1;"}, None
+    )
+    bd.CHECK_JS = bd.FRONTEND_SRC / "nope"
+    rc = bd.verify_frontend()
+    check("missing entry", rc, 1)
+bd.FRONTEND_SRC, bd.CHECK_JS = ORIG_SRC, ORIG_CHECK
 
 # 4. Missing asset referenced by index.html (vendor/chart.umd.min.js).
-bd.FRONTEND_SRC = _make_frontend(
-    {
-        "index.html": '<script src="vendor/chart.umd.min.js"></script>',
-        "styles.css": "body {}",
-        "app.js": "const a = 1;",
-    },
-    None,
-)
-bd.CHECK_JS = bd.FRONTEND_SRC / "nope"
-rc = bd.verify_frontend()
-check("missing asset", rc, 1)
-bd.FRONTEND_SRC, bd.CHECK_JS = orig_src, orig_check
+with tempfile.TemporaryDirectory() as tmp:
+    bd.FRONTEND_SRC = _populate_frontend(
+        Path(tmp),
+        {
+            "index.html": '<script src="vendor/chart.umd.min.js"></script>',
+            "styles.css": "body {}",
+            "app.js": "const a = 1;",
+        },
+        None,
+    )
+    bd.CHECK_JS = bd.FRONTEND_SRC / "nope"
+    rc = bd.verify_frontend()
+    check("missing asset", rc, 1)
+bd.FRONTEND_SRC, bd.CHECK_JS = ORIG_SRC, ORIG_CHECK
 
 # 5. Broken JS (check_js.py subprocess exits 1).
-bd.FRONTEND_SRC = _make_frontend(
-    {
-        "index.html": "<html></html>",
-        "styles.css": "body {}",
-        "app.js": "const a = 1;",
-    },
-    'print("UNBALANCED")\nimport sys\nsys.exit(1)\n',
-)
-# Point CHECK_JS at the temp script we just wrote to simulate a failing
-# delimiter validator.
-bd.CHECK_JS = bd.FRONTEND_SRC / "check_js.py"
-rc = bd.verify_frontend()
-check("broken js", rc, 1)
-bd.FRONTEND_SRC, bd.CHECK_JS = orig_src, orig_check
+with tempfile.TemporaryDirectory() as tmp:
+    bd.FRONTEND_SRC = _populate_frontend(
+        Path(tmp),
+        {
+            "index.html": "<html></html>",
+            "styles.css": "body {}",
+            "app.js": "const a = 1;",
+        },
+        'print("UNBALANCED")\nimport sys\nsys.exit(1)\n',
+    )
+    # Point CHECK_JS at the temp script we just wrote to simulate a failing
+    # delimiter validator.
+    bd.CHECK_JS = bd.FRONTEND_SRC / "check_js.py"
+    rc = bd.verify_frontend()
+    check("broken js", rc, 1)
+bd.FRONTEND_SRC, bd.CHECK_JS = ORIG_SRC, ORIG_CHECK
 
 # 6. Asset-ref parser skips external/anchor/query refs correctly.
 html = (
