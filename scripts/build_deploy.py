@@ -184,18 +184,6 @@ def verify_frontend() -> int:
                 ok = False
                 print(red(f"❌ app.js failed check_js.py:\n{(cp.stdout or '').strip()}"))
 
-    # 4. No shadow frontend copy inside the bundle trees — the packaged
-    #    launcher never serves from there, so a stale copy would only confuse.
-    for _, internal_dst in DEPLOYS:
-        shadow = internal_dst / "dashboard"
-        if shadow.exists():
-            print(
-                yellow(
-                    f"⚠️  Stale dashboard/ inside {internal_dst} is not served by the "
-                    "packaged launcher (it always uses the source frontend). Remove it."
-                )
-            )
-
     if not ok:
         print(red("❌ Frontend verification failed."))
         return 1
