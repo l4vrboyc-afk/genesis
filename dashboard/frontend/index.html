@@ -2,6 +2,8 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
+  <!-- Explicit favicon so the browser doesn't auto-request /favicon.ico and 404. -->
+  <link rel="icon" type="image/x-icon" href="favicon.ico">
   <title>GENESIS | Trading Engine</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <!-- Vendored locally so the candlestick chart works fully offline (no CDN dependency). -->
@@ -56,10 +58,11 @@
       </div>
     </header>
 
-    <!-- 2. LIVE TICK BANNER -->
-    <div class="flex items-center gap-2 text-xs text-zinc-300 bg-white/5 border border-white/10 px-3.5 py-2 rounded-xl backdrop-blur-md font-mono">
-      <span class="w-2 h-2 rounded-full bg-white animate-ping"></span>
-      <span id="live-price-banner-text">EURUSD: 1.08529 | USDJPY: 160.461 | GBPUSD: 1.27410</span>
+    <!-- 2. DYNAMIC PROFILE TICKER BAR (rendered per active profile via app.js) -->
+    <div class="ticker-bar-clean liquid-glass">
+      <div id="dynamic-ticker-container" class="ticker-items-group">
+        <!-- Populated dynamically via renderProfileTickerBar() -->
+      </div>
     </div>
 
     <!-- 3. METRICS CARDS -->
@@ -105,9 +108,27 @@
       <!-- IQ Option-Style USD Stake Panel (Notional removed) -->
       <div class="glass-card p-5 space-y-3">
         <div class="flex justify-between items-center border-b border-white/10 pb-2">
-          <h3 class="text-xs font-semibold text-white uppercase tracking-wider flex items-center gap-2">
-            ⚡ Quick Stake Execution
-          </h3>
+          <div class="flex items-center gap-3">
+            <h3 class="text-xs font-semibold text-white uppercase tracking-wider flex items-center gap-2">
+              ⚡ Quick Stake Execution
+            </h3>
+            <!-- Dynamic Setup Capsule with Integrated Smart Assist Toggle -->
+            <div id="qs-setup-pill" class="qs-setup-capsule">
+                <label class="smart-toggle-wrapper" title="Toggle Genesis Smart Assist (Auto Gate Validation &amp; SL/TP Placement)">
+                    <input type="checkbox" id="smart-assist-toggle" onchange="toggleSmartAssist(this.checked)" checked>
+                    <span class="smart-toggle-slider"></span>
+                </label>
+                <span class="smart-assist-label" id="assist-status-text">SMART ASSIST</span>
+                <span class="qs-sep">|</span>
+                <div id="qs-targets-group" class="qs-targets-inline">
+                    <span id="qs-sl">SL: <b>--</b></span>
+                    <span class="qs-sep">•</span>
+                    <span id="qs-tp">TP: <b>--</b></span>
+                    <span class="qs-sep">•</span>
+                    <span id="qs-hold">Hold: <b>--</b></span>
+                </div>
+            </div>
+          </div>
           <span class="text-[10px] text-zinc-400 font-mono bg-white/5 px-2 py-0.5 rounded border border-white/10">
             1:100 LEVERAGE
           </span>
@@ -116,12 +137,16 @@
         <div class="grid grid-cols-2 gap-3">
           <div>
             <label class="text-[11px] text-zinc-400 block mb-1 uppercase">Symbol</label>
-            <select id="stake-symbol" class="glass-select w-full p-2 text-xs font-bold font-mono" onchange="evaluateFiveGateways()">
-              <option value="EURUSD">EURUSD</option>
-              <option value="USDJPY">USDJPY</option>
-              <option value="GBPUSD">GBPUSD</option>
-              <option value="XAUUSD">XAUUSD</option>
-            </select>
+            <!-- Custom Liquid Glass Dropdown (replaces the native select) -->
+            <div class="custom-liquid-dropdown" id="symbol-dropdown">
+              <button type="button" class="dropdown-trigger" onclick="toggleSymbolMenu()">
+                <span id="selected-symbol-text">🏆 XAUUSD (Gold)</span>
+                <span class="chevron">▼</span>
+              </button>
+              <div class="dropdown-list liquid-glass-menu" id="symbol-menu-list">
+                <!-- Populated dynamically per active profile -->
+              </div>
+            </div>
           </div>
           <div>
             <label class="text-[11px] text-zinc-400 block mb-1 uppercase">Stake / Margin ($)</label>
@@ -163,11 +188,11 @@
 
         <!-- Action Execution Triggers -->
         <div class="grid grid-cols-2 gap-3 pt-1">
-          <button onclick="executeStakeTrade('BUY')" class="bg-white hover:bg-zinc-200 text-black font-bold py-2.5 rounded-xl text-xs transition active:scale-[0.98] shadow-lg shadow-white/10">
-            BUY ($20)
+          <button onclick="executeQuickStake('BUY')" class="bg-white hover:bg-zinc-200 text-black font-bold py-2.5 rounded-xl text-xs transition active:scale-[0.98] shadow-lg shadow-white/10">
+            BUY ($<span class="stake-val">20</span>)
           </button>
-          <button onclick="executeStakeTrade('SELL')" class="bg-white/10 hover:bg-white/20 text-white border border-white/20 font-bold py-2.5 rounded-xl text-xs transition active:scale-[0.98] backdrop-blur-md">
-            SELL ($20)
+          <button onclick="executeQuickStake('SELL')" class="bg-white/10 hover:bg-white/20 text-white border border-white/20 font-bold py-2.5 rounded-xl text-xs transition active:scale-[0.98] backdrop-blur-md">
+            SELL ($<span class="stake-val">20</span>)
           </button>
         </div>
       </div>
