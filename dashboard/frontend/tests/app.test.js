@@ -31,6 +31,10 @@ const HTML = `<!DOCTYPE html>
   </div>
 
   <!-- Stake Panel -->
+  <div id="symbol-dropdown" class="custom-liquid-dropdown">
+    <button type="button" id="selected-symbol-text">XAUUSD</button>
+    <div id="symbol-menu-list" class="dropdown-list liquid-glass-menu"></div>
+  </div>
   <select id="stake-symbol">
     <option value="EURUSD">EURUSD</option>
     <option value="USDJPY">USDJPY</option>
@@ -38,12 +42,50 @@ const HTML = `<!DOCTYPE html>
   </select>
   <input type="number" id="stake-amount-usd" value="20" />
   <span id="calculated-lots-preview">0.02 Lots</span>
+  <span class="stake-val">20</span>
   <div id="gateway-overall-status" class="gate-status-text neutral">CHECKING...</div>
   <div id="gate-1" class="gate-pill">EMA</div>
   <div id="gate-2" class="gate-pill">ADX</div>
   <div id="gate-3" class="gate-pill">RSI</div>
   <div id="gate-4" class="gate-pill">VOL</div>
   <div id="gate-5" class="gate-pill">REG</div>
+
+  <!-- Header Trade Signal Pill -->
+  <div id="trade-signal-pill" class="signal-pill signal-wait">
+    <div class="signal-badge">
+      <span class="signal-dot"></span>
+      <span id="sig-action">SCANNING...</span>
+    </div>
+    <div class="signal-details">
+      <span id="sig-sl">SL: --</span>
+      <span class="sig-divider">•</span>
+      <span id="sig-tp">TP: --</span>
+      <span class="sig-divider">•</span>
+      <span id="sig-duration">Hold: --</span>
+    </div>
+  </div>
+
+  <!-- Quick Stake Inline Signal Pill with Smart Assist Toggle -->
+  <div id="qs-setup-pill" class="qs-setup-capsule">
+    <label class="smart-toggle-wrapper" title="Toggle Genesis Smart Assist">
+      <input type="checkbox" id="smart-assist-toggle" onchange="toggleSmartAssist(this.checked)" checked>
+      <span class="smart-toggle-slider"></span>
+    </label>
+    <span class="smart-assist-label" id="assist-status-text">SMART ASSIST</span>
+    <span class="qs-sep">|</span>
+    <div id="qs-targets-group" class="qs-targets-inline">
+      <span id="qs-sl">SL: <b>--</b></span>
+      <span class="qs-sep">•</span>
+      <span id="qs-tp">TP: <b>--</b></span>
+      <span class="qs-sep">•</span>
+      <span id="qs-hold">Hold: <b>--</b></span>
+    </div>
+  </div>
+  <span id="gate-ema" class="hpill">EMA</span>
+  <span id="gate-adx" class="hpill">ADX</span>
+  <span id="gate-rsi" class="hpill">RSI</span>
+  <span id="gate-vol" class="hpill">VOL</span>
+  <span id="gate-reg" class="hpill">REG</span>
 
   <!-- Header controls -->
   <button id="engine-toggle-btn" class="engine-btn paused"><span id="engine-btn-text">START ENGINE</span></button>
@@ -70,10 +112,13 @@ const HTML = `<!DOCTYPE html>
   <canvas id="mainProfitChart"></canvas>
   <canvas id="modalProfitChart"></canvas>
 
+  <!-- Ticker bar -->
+  <div id="dynamic-ticker-container"></div>
+
   <!-- Tables -->
   <span id="active-count">0 OPEN POSITIONS</span>
-  <tbody id="active-positions-body"></tbody>
-  <tbody id="recent-history-body"></tbody>
+  <table><tbody id="active-positions-body"></tbody></table>
+  <table><tbody id="recent-history-body"></tbody></table>
 
   <!-- Modals -->
   <div id="chart-modal" class="hidden">Chart Modal</div>
@@ -177,11 +222,37 @@ describe("Genesis Dashboard App", () => {
       "window.TRADING_PROFILES = TRADING_PROFILES;" +
       "window.selectProfile = selectProfile;" +
       "window.populateSymbolDropdown = populateSymbolDropdown;" +
+      "window.toggleSymbolMenu = toggleSymbolMenu;" +
+      "window.selectSymbol = selectSymbol;" +
+      "window.syncProfilePairsDropdown = syncProfilePairsDropdown;" +
+      "window.getSelectedSymbol = function() { return selectedSymbol; };" +
       "window.sendDiscordTradeNotification = sendDiscordTradeNotification;" +
       "window.evaluateFiveGateways = evaluateFiveGateways;" +
+      "window.debouncedEvaluateGateways = debouncedEvaluateGateways;" +
+      "window.flushDebouncedGateways = flushDebouncedGateways;" +
+      "window.clearDebouncedGateways = clearDebouncedGateways;" +
+      "window.setGatewayDebounceMs = setGatewayDebounceMs;" +
       "window.updateGatewayUI = updateGatewayUI;" +
       "window.simulateGatewayCheck = simulateGatewayCheck;" +
-      "window.getActiveProfile = function() { return activeProfile; };";
+      "window.updateTradeSignalPill = updateTradeSignalPill;" +
+      "window.calculateLocalSignalPreview = calculateLocalSignalPreview;" +
+      "window.renderSignalData = renderSignalData;" +
+      "window.applyWsGateUpdate = applyWsGateUpdate;" +
+      "window.applyWsSignalUpdate = applyWsSignalUpdate;" +
+      "window.updateQuickStakeSetup = updateQuickStakeSetup;" +
+      "window.toggleSmartAssist = toggleSmartAssist;" +
+      "window.checkAllGatesPassed = checkAllGatesPassed;" +
+      "window.getCalculatedTargets = getCalculatedTargets;" +
+      "window.executeQuickStake = executeQuickStake;" +
+      "window.getSmartAssistState = getSmartAssistState;" +
+      "window.getActiveProfile = getActiveProfile;" +
+      "window.getProfileName = getProfileName;" +
+      "window.backendProfileKeyToFrontend = backendProfileKeyToFrontend;" +
+      "window.recordBelongsToProfile = recordBelongsToProfile;" +
+      "window.computeScopedStats = computeScopedStats;" +
+      "window.renderProfileTickerBar = renderProfileTickerBar;" +
+      "window.applyTickerTick = applyTickerTick;" +
+      "window.onProfileChange = onProfileChange;";
 
     window.eval(bootstrap);
 
@@ -230,6 +301,38 @@ describe("Genesis Dashboard App", () => {
     }
     sel.innerHTML = '<option value="EURUSD">EURUSD</option><option value="USDJPY">USDJPY</option><option value="GBPUSD">GBPUSD</option>';
 
+    // Reset the custom symbol dropdown (re-create if a previous test removed it)
+    if (!document.getElementById("symbol-menu-list")) {
+      const wrap = document.createElement("div");
+      wrap.id = "symbol-dropdown";
+      wrap.className = "custom-liquid-dropdown";
+      wrap.innerHTML = '<button type="button" id="selected-symbol-text">XAUUSD</button><div id="symbol-menu-list" class="dropdown-list liquid-glass-menu"></div>';
+      document.body.appendChild(wrap);
+    } else {
+      document.getElementById("symbol-menu-list").classList.remove("open");
+      document.getElementById("symbol-menu-list").innerHTML = "";
+    }
+    if (!document.getElementById("selected-symbol-text")) {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.id = "selected-symbol-text";
+      btn.textContent = "XAUUSD";
+      document.body.appendChild(btn);
+    }
+
+    // Reset the header gateway pills (re-create if a previous test removed them)
+    var hpillIds = ['gate-ema', 'gate-adx', 'gate-rsi', 'gate-vol', 'gate-reg'];
+    hpillIds.forEach(function(id) {
+      if (!document.getElementById(id)) {
+        var pill = document.createElement("span");
+        pill.id = id;
+        pill.className = "hpill";
+        document.body.appendChild(pill);
+      }
+      var pillEl = document.getElementById(id);
+      if (pillEl) pillEl.className = "hpill";
+    });
+
     // Restore gateway pills if a previous test removed them
     var gateIds = ['gate-1', 'gate-2', 'gate-3', 'gate-4', 'gate-5'];
     gateIds.forEach(function(id) {
@@ -257,8 +360,45 @@ describe("Genesis Dashboard App", () => {
       statusEl.className = "gate-status-text neutral";
       statusEl.textContent = "CHECKING...";
     }
+    // Reset the Trade Signal Pill to neutral/wait state
+    var pill = document.getElementById("trade-signal-pill");
+    if (pill) {
+      pill.className = "signal-pill liquid-glass signal-wait";
+    }
+    var sigAction = document.getElementById("sig-action");
+    if (sigAction) sigAction.textContent = "SCANNING...";
+    ["sig-sl", "sig-tp", "sig-duration"].forEach(function(id) {
+      var el = document.getElementById(id);
+      if (el) el.textContent = id.replace("sig-", "") + ": --";
+    });
+    // Reset the Quick Stake setup capsule (re-create if a test removed it)
+    var qsPill = document.getElementById("qs-setup-pill");
+    if (!qsPill) {
+      qsPill = document.createElement("div");
+      qsPill.id = "qs-setup-pill";
+      qsPill.className = "qs-setup-capsule";
+      qsPill.innerHTML = '<label class="smart-toggle-wrapper"><input type="checkbox" id="smart-assist-toggle" checked><span class="smart-toggle-slider"></span></label><span class="smart-assist-label" id="assist-status-text">SMART ASSIST</span><span class="qs-sep">|</span><div id="qs-targets-group" class="qs-targets-inline"><span id="qs-sl">SL: <b>--</b></span><span class="qs-sep">•</span><span id="qs-tp">TP: <b>--</b></span><span class="qs-sep">•</span><span id="qs-hold">Hold: <b>--</b></span></div>';
+      document.body.appendChild(qsPill);
+    } else {
+      qsPill.className = "qs-setup-capsule";
+      var toggle = document.getElementById("smart-assist-toggle");
+      if (toggle) toggle.checked = true;
+      var label = document.getElementById("assist-status-text");
+      if (label) {
+        label.textContent = "SMART ASSIST";
+        label.style.color = "#38bdf8";
+      }
+      var tg = document.getElementById("qs-targets-group");
+      if (tg) tg.classList.remove("disabled");
+    }
+    ["qs-sl", "qs-tp", "qs-hold"].forEach(function(id) {
+      var el = document.getElementById(id);
+      if (el) el.innerHTML = id.replace("qs-", "").toUpperCase() + ": <b>--</b>";
+    });
     // Reset activeProfile back to swing_trader (the default)
     window.selectProfile("swing_trader");
+    // Reset Smart Assist back to enabled state
+    window.toggleSmartAssist(true);
     // Remove any fetch stub left by engine-toggle tests so later tests
     // (history modal) observe the jsdom default (no fetch).
     window.fetch = undefined;
@@ -953,6 +1093,188 @@ describe("Genesis Dashboard App", () => {
       document.body.removeChild(document.getElementById("stake-symbol"));
       assert.doesNotThrow(() => window.populateSymbolDropdown(["EURUSD"]));
     });
+
+    it("populates the custom liquid dropdown menu with items", () => {
+      window.populateSymbolDropdown(["EURUSD", "XAUUSD", "GBPUSD"]);
+
+      const menu = document.getElementById("symbol-menu-list");
+      const items = menu.querySelectorAll(".dropdown-item");
+      assert.equal(items.length, 3);
+      assert.ok(items[0].textContent.includes("EURUSD"));
+      assert.ok(items[1].textContent.includes("Gold"));
+    });
+
+    it("selects the first pair as the active symbol", () => {
+      window.populateSymbolDropdown(["GBPUSD", "EURUSD"]);
+      assert.equal(window.getSelectedSymbol(), "GBPUSD");
+      assert.equal(
+        document.getElementById("selected-symbol-text").textContent,
+        "GBPUSD"
+      );
+    });
+  });
+
+  // ── Custom Liquid Symbol Dropdown ─────────────────────────────────
+
+  describe("Custom Symbol Dropdown", () => {
+    // Teardown: cancel any debounce timer a selection armed and restore
+    // the default 250 ms window so a stray evaluateFiveGateways cannot
+    // fire into the next test or perturb its timing expectations.
+    afterEach(() => {
+      if (window.clearDebouncedGateways) window.clearDebouncedGateways();
+      if (window.setGatewayDebounceMs) window.setGatewayDebounceMs(250);
+    });
+
+    it("toggleSymbolMenu toggles the open class", () => {
+      const menu = document.getElementById("symbol-menu-list");
+      menu.classList.remove("open");
+      window.toggleSymbolMenu();
+      assert.ok(menu.classList.contains("open"));
+      window.toggleSymbolMenu();
+      assert.ok(!menu.classList.contains("open"));
+    });
+
+    it("selectSymbol updates the trigger label and closes the menu", () => {
+      const menu = document.getElementById("symbol-menu-list");
+      menu.classList.add("open");
+
+      // skipGateway=true keeps the async gateway re-check out of this test
+      window.selectSymbol("XAUUSD", true);
+
+      assert.equal(
+        document.getElementById("selected-symbol-text").textContent,
+        "🏆 XAUUSD (Gold)"
+      );
+      assert.ok(!menu.classList.contains("open"));
+      assert.equal(window.getSelectedSymbol(), "XAUUSD");
+      assert.equal(document.getElementById("stake-symbol").value, "XAUUSD");
+    });
+
+    it("selectSymbol labels non-Gold symbols plainly", () => {
+      window.selectSymbol("GBPUSD");
+      assert.equal(
+        document.getElementById("selected-symbol-text").textContent,
+        "GBPUSD"
+      );
+    });
+
+    it("selectSymbol with skipGateway skips the gateway re-check", async () => {
+      let fetchCalled = false;
+      window.fetch = async () => { fetchCalled = true; return { ok: true, json: async () => ({ gates: [true, true, true, true, true] }) }; };
+
+      window.selectSymbol("EURUSD", true);
+      await new Promise(r => setTimeout(r, 20));
+      assert.ok(!fetchCalled, "fetch should not fire when skipGateway is true");
+    });
+
+    it("debouncedEvaluateGateways coalesces rapid symbol changes into one fetch", async () => {
+      // Only count /api/evaluator fetches — the signal + quick-stake pills
+      // fire their own (immediate) requests on every selection.
+      let evaluatorCalls = [];
+      window.fetch = async (url) => {
+        if (String(url).includes("/api/evaluator")) evaluatorCalls.push(url);
+        return { ok: true, json: async () => ({ gates: [true, true, true, true, true] }) };
+      };
+
+      // Shorten the debounce window so the test stays fast and deterministic.
+      window.setGatewayDebounceMs(30);
+
+      // Rapid-fire symbol scroll — only the LAST symbol should hit the API.
+      window.selectSymbol("EURUSD");
+      window.selectSymbol("GBPUSD");
+      window.selectSymbol("USDJPY");
+
+      assert.equal(evaluatorCalls.length, 0, "no evaluator fetch before the debounce window elapses");
+
+      await new Promise(r => setTimeout(r, 80));
+
+      assert.equal(evaluatorCalls.length, 1, "exactly one evaluator fetch after the debounce window");
+      assert.ok(evaluatorCalls[0].includes("symbol=USDJPY"), "fetch should target the last selected symbol");
+    });
+
+    it("debouncedEvaluateGateways drops a stale in-flight response for an older symbol", async () => {
+      // First call resolves its response AFTER the user has moved on — the
+      // stale result must NOT overwrite the newer symbol's pills.
+      let resolveFirst;
+      let evaluatorCalls = 0;
+      window.fetch = async (url) => {
+        if (String(url).includes("/api/evaluator")) evaluatorCalls++;
+        if (String(url).includes("symbol=EURUSD")) {
+          return new Promise(resolve => { resolveFirst = resolve; });
+        }
+        // USDJPY resolves immediately with all-pass gates.
+        return { ok: true, json: async () => ({ gates: [true, true, true, true, true] }) };
+      };
+
+      window.selectSymbol("EURUSD");
+      await window.flushDebouncedGateways(); // fires EURUSD fetch, stays in-flight
+      await new Promise(r => setTimeout(r, 10));
+
+      // User scrolls on to USDJPY; its fetch resolves and paints pills.
+      window.selectSymbol("USDJPY");
+      await window.flushDebouncedGateways();
+      await new Promise(r => setTimeout(r, 10));
+      assert.equal(document.getElementById("gate-1").className.includes("passed"), true);
+
+      // Now the OLD EURUSD response finally arrives — it must be dropped.
+      if (resolveFirst) {
+        resolveFirst({ ok: true, json: async () => ({ gates: [false, false, false, false, false] }) });
+      }
+      await new Promise(r => setTimeout(r, 20));
+
+      // Pills still reflect USDJPY's all-pass result, not the stale all-fail one.
+      assert.equal(document.getElementById("gate-1").className.includes("passed"), true);
+      assert.equal(document.getElementById("gate-5").className.includes("passed"), true);
+      const status = document.getElementById("gateway-overall-status");
+      assert.equal(status.textContent, "5/5 OPTIMAL");
+    });
+
+    it("flushDebouncedGateways runs a pending evaluation immediately", async () => {
+      let evaluatorCalls = [];
+      window.fetch = async (url) => {
+        if (String(url).includes("/api/evaluator")) evaluatorCalls.push(url);
+        return { ok: true, json: async () => ({ gates: [true, true, true, true, true] }) };
+      };
+
+      // A long window proves flush bypasses the timer rather than waiting.
+      window.setGatewayDebounceMs(5000);
+
+      window.selectSymbol("EURUSD");
+      assert.equal(evaluatorCalls.length, 0, "pending — debounce not elapsed");
+      window.flushDebouncedGateways();
+      await new Promise(r => setTimeout(r, 10));
+      assert.equal(evaluatorCalls.length, 1, "flush should fire the pending evaluation");
+    });
+
+    it("syncProfilePairsDropdown populates menu from the active profile", () => {
+      window.selectProfile("day_trader");
+      window.syncProfilePairsDropdown();
+
+      const menu = document.getElementById("symbol-menu-list");
+      const items = menu.querySelectorAll(".dropdown-item");
+      assert.ok(items.length > 0);
+      assert.equal(items.length, window.TRADING_PROFILES.day_trader.pairs.length);
+    });
+
+    it("updateGatewayUI updates the header hpill matrix", () => {
+      window.updateGatewayUI([true, false, true, false, true]);
+
+      assert.ok(document.getElementById("gate-ema").classList.contains("passed"));
+      assert.ok(document.getElementById("gate-adx").classList.contains("failed"));
+      assert.ok(document.getElementById("gate-rsi").classList.contains("passed"));
+      assert.ok(document.getElementById("gate-vol").classList.contains("failed"));
+      assert.ok(document.getElementById("gate-reg").classList.contains("passed"));
+    });
+  });
+
+  // ── updateLotConversionPreview stake-val sync ─────────────────────
+
+  describe("updateLotConversionPreview stake sync", () => {
+    it("updates .stake-val spans with the rounded stake amount", () => {
+      document.getElementById("stake-amount-usd").value = "35";
+      window.updateLotConversionPreview();
+      assert.equal(document.querySelector(".stake-val").textContent, "35");
+    });
   });
 
   // ── selectProfile ──────────────────────────────────────────────────
@@ -996,6 +1318,308 @@ describe("Genesis Dashboard App", () => {
 
       assert.equal(window.getActiveProfile(), "day_trader");
       assert.equal(window.localStorage.getItem("genesis_active_profile"), "day_trader");
+    });
+  });
+
+  // ── Profile Ticker Bar ─────────────────────────────────────────────
+
+  describe("renderProfileTickerBar", () => {
+    it("renders one ticker item per pair configured for the active profile", () => {
+      window.selectProfile("swing_trader");
+      window.renderProfileTickerBar();
+
+      const container = document.getElementById("dynamic-ticker-container");
+      const items = container.querySelectorAll(".ticker-item-clean");
+      assert.equal(items.length, window.TRADING_PROFILES.swing_trader.pairs.length);
+    });
+
+    it("re-scopes the ticker bar when the profile changes", () => {
+      window.selectProfile("swing_trader");
+      window.renderProfileTickerBar();
+      const swingCount = document.querySelectorAll(".ticker-item-clean").length;
+
+      window.selectProfile("day_trader");
+      window.renderProfileTickerBar();
+      const dayCount = document.querySelectorAll(".ticker-item-clean").length;
+
+      assert.notEqual(swingCount, dayCount);
+      assert.equal(dayCount, window.TRADING_PROFILES.day_trader.pairs.length);
+    });
+
+    it("is a no-op when the container element is missing", () => {
+      const container = document.getElementById("dynamic-ticker-container");
+      const parent = container.parentNode;
+      parent.removeChild(container);
+      try {
+        assert.doesNotThrow(() => window.renderProfileTickerBar());
+      } finally {
+        parent.appendChild(container);
+      }
+    });
+  });
+
+  describe("applyTickerTick", () => {
+    it("patches the ticker price for the matching symbol", () => {
+      window.selectProfile("swing_trader");
+      window.renderProfileTickerBar();
+
+      window.applyTickerTick({ symbol: "EURUSD", bid: 1.0850, ask: 1.0852 });
+      const el = document.getElementById("ticker-price-EURUSD");
+      assert.equal(el.textContent, "1.08500");
+    });
+
+    it("tints up/down based on the direction of the last move", () => {
+      window.selectProfile("swing_trader");
+      window.renderProfileTickerBar();
+
+      window.applyTickerTick({ symbol: "EURUSD", bid: 1.0800 });
+      window.applyTickerTick({ symbol: "EURUSD", bid: 1.0850 });
+      assert.ok(document.getElementById("ticker-price-EURUSD").classList.contains("up"));
+
+      window.applyTickerTick({ symbol: "EURUSD", bid: 1.0820 });
+      assert.ok(document.getElementById("ticker-price-EURUSD").classList.contains("down"));
+    });
+  });
+
+  // ── Profile scoping helpers ───────────────────────────────────────
+
+  describe("backendProfileKeyToFrontend", () => {
+    it("maps backend keys to front-end profile keys", () => {
+      assert.equal(window.backendProfileKeyToFrontend("default"), "swing_trader");
+      assert.equal(window.backendProfileKeyToFrontend("scalper"), "range_scalper");
+      assert.equal(window.backendProfileKeyToFrontend("breakout"), "breakout_hunter");
+      assert.equal(window.backendProfileKeyToFrontend("daytrader"), "day_trader");
+    });
+
+    it("returns null for unmapped backend keys", () => {
+      assert.equal(window.backendProfileKeyToFrontend("unknown_profile"), null);
+      assert.equal(window.backendProfileKeyToFrontend(""), null);
+    });
+  });
+
+  describe("recordBelongsToProfile", () => {
+    it("keeps records tagged with a strategy of the active profile", () => {
+      window.selectProfile("swing_trader");
+      assert.ok(window.recordBelongsToProfile({ strategy: "Smart Trend Breakout" }));
+      assert.ok(window.recordBelongsToProfile({ strategy: "Mean Reversion" }));
+    });
+
+    it("hides records from another profile's strategies", () => {
+      window.selectProfile("swing_trader");
+      assert.equal(window.recordBelongsToProfile({ strategy: "Scalper Momentum" }), false);
+      assert.equal(window.recordBelongsToProfile({ strategy: "Trend Engine" }), false);
+      assert.equal(window.recordBelongsToProfile({ strategy: "Session Breakout" }), false);
+    });
+
+    it("keeps un-attributed records visible", () => {
+      window.selectProfile("swing_trader");
+      assert.ok(window.recordBelongsToProfile({}));
+      assert.ok(window.recordBelongsToProfile({ strategy: "Manual Override" }));
+    });
+
+    it("honours an explicit profileKey argument", () => {
+      assert.ok(window.recordBelongsToProfile({ strategy: "Trend Engine" }, "day_trader"));
+      assert.equal(window.recordBelongsToProfile({ strategy: "Trend Engine" }, "swing_trader"), false);
+    });
+
+    it("prefers the exact profile tag over strategy-name inference", () => {
+      // day_trader can run "Trend Engine" via strategy-name inference, but
+      // the exact profile tag is authoritative: a tag of "swing_trader"
+      // must exclude the record even though its strategy matches day_trader.
+      assert.equal(
+        window.recordBelongsToProfile({ profile: "swing_trader", strategy: "Trend Engine" }, "day_trader"),
+        false
+      );
+      assert.ok(
+        window.recordBelongsToProfile({ profile: "swing_trader", strategy: "Scalper Momentum" }, "swing_trader")
+      );
+    });
+
+    it("maps backend profile keys to front-end keys when matching the tag", () => {
+      // DB stores the backend key (default/scalper/breakout/daytrader) from
+      // settings.active_profile — the helper must map before comparing.
+      assert.ok(
+        window.recordBelongsToProfile({ profile: "daytrader", strategy: "Manual Override" }, "day_trader")
+      );
+      assert.equal(
+        window.recordBelongsToProfile({ profile: "scalper", strategy: "Manual Override" }, "swing_trader"),
+        false
+      );
+    });
+
+    it("falls back to strategy inference when the record has no profile tag", () => {
+      window.selectProfile("swing_trader");
+      assert.ok(window.recordBelongsToProfile({ strategy: "Smart Trend Breakout" }));
+      assert.equal(window.recordBelongsToProfile({ strategy: "Trend Engine" }), false);
+    });
+  });
+
+  describe("renderRecentHistory profile scoping", () => {
+    it("shows only trades from the active profile's strategies", () => {
+      window.selectProfile("day_trader");
+      const trades = [
+        { symbol: "EURUSD", strategy: "Trend Engine", direction: "buy", profit: 10 },
+        { symbol: "GBPUSD", strategy: "Scalper Momentum", direction: "sell", profit: -5 },
+        { symbol: "USDJPY", strategy: "Mean Reversion", direction: "buy", profit: 3 },
+      ];
+      window.renderRecentHistory(trades);
+
+      const rows = document.getElementById("recent-history-body").querySelectorAll("tr");
+      assert.equal(rows.length, 2);
+      assert.ok(rows[0].textContent.includes("EURUSD"));
+      assert.ok(rows[1].textContent.includes("USDJPY"));
+    });
+
+    it("shows an empty state when no trades match the active profile", () => {
+      window.selectProfile("breakout_hunter");
+      window.renderRecentHistory([
+        { symbol: "EURUSD", strategy: "Trend Engine", direction: "buy", profit: 10 },
+      ]);
+
+      const html = document.getElementById("recent-history-body").innerHTML;
+      assert.ok(html.includes("No closed trades"));
+    });
+  });
+
+  describe("renderActivePositions profile scoping", () => {
+    it("hides positions left by another profile's strategies", () => {
+      window.selectProfile("swing_trader");
+      window.renderActivePositions([
+        { ticket: 1, symbol: "EURUSD", comment: "Smart Trend Breakout entry", direction: "buy", volume: 0.1, profit: 5 },
+        { ticket: 2, symbol: "GBPUSD", comment: "Trend Engine entry", direction: "sell", volume: 0.1, profit: -3 },
+        { ticket: 3, symbol: "USDJPY", comment: "Manual Override", direction: "buy", volume: 0.1, profit: 1 },
+      ]);
+
+      const rows = document.getElementById("active-positions-body").querySelectorAll("tr");
+      assert.equal(rows.length, 2);
+      assert.equal(document.getElementById("active-count").textContent, "2 OPEN POSITIONS");
+    });
+
+    it("keeps all positions when none are attributed", () => {
+      window.selectProfile("swing_trader");
+      window.renderActivePositions([
+        { ticket: 1, symbol: "EURUSD", direction: "buy", volume: 0.1, profit: 5 },
+        { ticket: 2, symbol: "GBPUSD", direction: "sell", volume: 0.1, profit: -3 },
+      ]);
+
+      const rows = document.getElementById("active-positions-body").querySelectorAll("tr");
+      assert.equal(rows.length, 2);
+    });
+  });
+
+  describe("onProfileChange", () => {
+    it("persists the profile and refreshes the header badge", () => {
+      window.onProfileChange("breakout_hunter");
+
+      assert.equal(window.getActiveProfile(), "breakout_hunter");
+      assert.equal(window.localStorage.getItem("genesis_active_profile"), "breakout_hunter");
+      assert.equal(document.getElementById("active-profile-badge").textContent, "PROFILE BREAKOUT_HUNTER");
+    });
+
+    it("re-renders the ticker bar for the new profile", () => {
+      window.onProfileChange("swing_trader");
+      window.renderProfileTickerBar();
+      const swingCount = document.querySelectorAll(".ticker-item-clean").length;
+
+      window.onProfileChange("day_trader");
+      const dayCount = document.querySelectorAll(".ticker-item-clean").length;
+      assert.equal(dayCount, window.TRADING_PROFILES.day_trader.pairs.length);
+      assert.notEqual(dayCount, swingCount);
+    });
+
+    it("ignores unknown profile keys without mutating state", () => {
+      window.selectProfile("swing_trader");
+      window.onProfileChange("not_a_profile");
+
+      assert.equal(window.getActiveProfile(), "swing_trader");
+      assert.equal(window.localStorage.getItem("genesis_active_profile"), "swing_trader");
+    });
+  });
+
+  describe("computeScopedStats", () => {
+    it("computes wins, losses, and pnl from a closed-trade list", () => {
+      const stats = window.computeScopedStats([
+        { profit: 10 },
+        { profit: -5 },
+        { profit: 2.5 },
+      ]);
+      assert.equal(stats.total, 3);
+      assert.equal(stats.winRate, "66.7");
+      assert.equal(stats.totalPnl, 7.5);
+      assert.equal(stats.avgWin, 6.25);
+      assert.equal(stats.avgLoss, 5);
+    });
+
+    it("computes avgRr as the mean |return_r| over non-zero trades (mirrors backend avg_rr)", () => {
+      // Backend averages positive achieved_rr (= |move|/|risk|), so the
+      // frontend mirrors it with the magnitudes of non-zero return_r:
+      // (2 + 1 + 0.5) / 3 ≈ 1.17
+      const stats = window.computeScopedStats([
+        { profit: 10, return_r: 2 },
+        { profit: -5, return_r: -1 },
+        { profit: 2.5, return_r: 0.5 },
+      ]);
+      assert.equal(stats.avgRr, 1.17);
+    });
+
+    it("ignores zero/absent return_r when averaging", () => {
+      const stats = window.computeScopedStats([
+        { profit: 10, return_r: 2 },
+        { profit: -5, return_r: 0 },
+        { profit: 2.5 }, // no return_r → excluded
+      ]);
+      assert.equal(stats.avgRr, 2);
+    });
+
+    it("computes maxDrawdown from the chronological cumulative PnL curve", () => {
+      // Close order: +100 peak, then -50 (drawdown 50%), then -20 (drawdown
+      // 70% vs peak 100), then a fresh +200 peak. Largest drop = 70%.
+      const stats = window.computeScopedStats([
+        { profit: 100, close_time: "2026-07-01T10:00:00Z" },
+        { profit: -50, close_time: "2026-07-02T10:00:00Z" },
+        { profit: -20, close_time: "2026-07-03T10:00:00Z" },
+        { profit: 200, close_time: "2026-07-04T10:00:00Z" },
+      ]);
+      assert.equal(stats.maxDrawdown, 70);
+    });
+
+    it("computes maxDrawdown even when trades arrive out of close-time order", () => {
+      // Same curve as above, but the list is scrambled — the function must
+      // sort chronologically before measuring the drawdown.
+      const stats = window.computeScopedStats([
+        { profit: 200, close_time: "2026-07-04T10:00:00Z" },
+        { profit: -20, close_time: "2026-07-03T10:00:00Z" },
+        { profit: 100, close_time: "2026-07-01T10:00:00Z" },
+        { profit: -50, close_time: "2026-07-02T10:00:00Z" },
+      ]);
+      assert.equal(stats.maxDrawdown, 70);
+    });
+
+    it("clamps drawdown at 100% when the PnL curve dips below zero", () => {
+      // +100 peak, then -150 → running = -50, so (100 - (-50))/100 = 150%.
+      // Without a starting balance the raw value looks impossible, so it
+      // is clamped to 100.
+      const stats = window.computeScopedStats([
+        { profit: 100, close_time: "2026-07-01T10:00:00Z" },
+        { profit: -150, close_time: "2026-07-02T10:00:00Z" },
+      ]);
+      assert.equal(stats.maxDrawdown, 100);
+    });
+
+    it("returns 0 drawdown and 0 avgRr for a never-positive or empty list", () => {
+      const empty = window.computeScopedStats([]);
+      assert.equal(empty.total, 0);
+      assert.equal(empty.winRate, "0.0");
+      assert.equal(empty.totalPnl, 0);
+      assert.equal(empty.avgRr, 0);
+      assert.equal(empty.maxDrawdown, 0);
+
+      // Always-losing curve never goes positive → drawdown stays 0.
+      const losing = window.computeScopedStats([
+        { profit: -5, close_time: "2026-07-01T10:00:00Z" },
+        { profit: -10, close_time: "2026-07-02T10:00:00Z" },
+      ]);
+      assert.equal(losing.maxDrawdown, 0);
     });
   });
 
@@ -1152,6 +1776,38 @@ describe("Genesis Dashboard App", () => {
       assert.ok(gate1.classList.contains("passed"));
     });
 
+    it("falls back to simulateGatewayCheck on a non-OK backend response", async () => {
+      // e.g. /api/evaluator returns 503 when MT5 market data is unavailable
+      window.fetch = async () => ({
+        ok: false,
+        status: 503,
+        json: async () => ({ detail: "MT5 market data unavailable" }),
+      });
+
+      await window.evaluateFiveGateways();
+
+      // simulateGatewayCheck for EURUSD returns [true, true, false, true, true]
+      const gate3 = document.getElementById("gate-3");
+      assert.ok(gate3.classList.contains("failed"));
+      const gate1 = document.getElementById("gate-1");
+      assert.ok(gate1.classList.contains("passed"));
+    });
+
+    it("falls back to simulateGatewayCheck on a malformed payload", async () => {
+      window.fetch = async () => ({
+        ok: true,
+        json: async () => ({ nonsense: true }),
+      });
+
+      await window.evaluateFiveGateways();
+
+      // simulateGatewayCheck for EURUSD returns [true, true, false, true, true]
+      const gate3 = document.getElementById("gate-3");
+      assert.ok(gate3.classList.contains("failed"));
+      const gate1 = document.getElementById("gate-1");
+      assert.ok(gate1.classList.contains("passed"));
+    });
+
     it("calls updateLotConversionPreview after evaluation", async () => {
       window.fetch = async () => ({
         ok: true,
@@ -1245,6 +1901,469 @@ describe("Genesis Dashboard App", () => {
       const status = document.getElementById("gateway-overall-status");
       assert.equal(status.textContent, "5/5 OPTIMAL");
       assert.ok(status.classList.contains("ready"));
+    });
+  });
+
+  // ── updateTradeSignalPill ──────────────────────────────────────────
+
+  describe("updateTradeSignalPill", () => {
+    afterEach(() => {
+      window.fetch = undefined;
+    });
+
+    it("fetches signal data from the API and renders it", async () => {
+      window.fetch = async (url) => {
+        assert.ok(url.includes("symbol=EURUSD"));
+        assert.ok(url.includes("profile=swing_trader"));
+        return {
+          ok: true,
+          json: async () => ({
+            action: "BUY SIGNAL",
+            type: "BUY",
+            sl: "-15 pips",
+            tp: "+30 pips",
+            duration: "45m",
+          }),
+        };
+      };
+
+      await window.updateTradeSignalPill("EURUSD");
+
+      const pill = document.getElementById("trade-signal-pill");
+      assert.ok(pill.classList.contains("signal-buy"));
+
+      const action = document.getElementById("sig-action");
+      assert.equal(action.textContent, "BUY SIGNAL");
+
+      assert.equal(document.getElementById("sig-sl").textContent, "SL: -15 pips");
+      assert.equal(document.getElementById("sig-tp").textContent, "TP: +30 pips");
+      assert.equal(document.getElementById("sig-duration").textContent, "Hold: 45m");
+    });
+
+    it("falls back to calculateLocalSignalPreview when fetch fails", async () => {
+      window.fetch = async () => {
+        throw new Error("Network unreachable");
+      };
+
+      await window.updateTradeSignalPill("XAUUSD");
+
+      // Gold should get a BUY signal
+      const pill = document.getElementById("trade-signal-pill");
+      assert.ok(pill.classList.contains("signal-buy"));
+
+      const action = document.getElementById("sig-action");
+      assert.equal(action.textContent, "BUY SIGNAL");
+    });
+
+    it("falls back to calculateLocalSignalPreview on a non-OK backend response", async () => {
+      // e.g. /api/signal returns 503 when MT5 market data is unavailable
+      window.fetch = async () => ({
+        ok: false,
+        status: 503,
+        json: async () => ({ detail: "MT5 market data unavailable" }),
+      });
+
+      await window.updateTradeSignalPill("XAUUSD");
+
+      const pill = document.getElementById("trade-signal-pill");
+      assert.ok(pill.classList.contains("signal-buy"));
+      assert.equal(document.getElementById("sig-action").textContent, "BUY SIGNAL");
+    });
+
+    it("falls back to calculateLocalSignalPreview on a malformed payload", async () => {
+      window.fetch = async () => ({
+        ok: true,
+        json: async () => ({ nonsense: true }),
+      });
+
+      await window.updateTradeSignalPill("EURUSD");
+
+      // Non-Gold pair should get a WAIT preview
+      const pill = document.getElementById("trade-signal-pill");
+      assert.ok(pill.classList.contains("signal-wait"));
+      assert.equal(document.getElementById("sig-action").textContent, "NEUTRAL / WAIT");
+    });
+  });
+
+  // ── calculateLocalSignalPreview ────────────────────────────────────
+
+  describe("calculateLocalSignalPreview", () => {
+    it("generates a BUY signal for Gold (XAUUSD)", () => {
+      window.calculateLocalSignalPreview("XAUUSD");
+
+      const pill = document.getElementById("trade-signal-pill");
+      assert.ok(pill.classList.contains("signal-buy"));
+      assert.equal(document.getElementById("sig-action").textContent, "BUY SIGNAL");
+    });
+
+    it("generates a WAIT signal for non-Gold pairs", () => {
+      window.calculateLocalSignalPreview("EURUSD");
+
+      const pill = document.getElementById("trade-signal-pill");
+      assert.ok(pill.classList.contains("signal-wait"));
+      assert.equal(document.getElementById("sig-action").textContent, "NEUTRAL / WAIT");
+    });
+  });
+
+  // ── renderSignalData ───────────────────────────────────────────────
+
+  describe("renderSignalData", () => {
+    it("renders BUY state with green pill", () => {
+      window.renderSignalData({
+        action: "BUY SIGNAL",
+        type: "BUY",
+        sl: "-15 pips",
+        tp: "+30 pips",
+        duration: "45m",
+      });
+
+      const pill = document.getElementById("trade-signal-pill");
+      assert.ok(pill.classList.contains("signal-buy"));
+      assert.ok(!pill.classList.contains("signal-sell"));
+      assert.ok(!pill.classList.contains("signal-wait"));
+
+      assert.equal(document.getElementById("sig-action").textContent, "BUY SIGNAL");
+      assert.equal(document.getElementById("sig-sl").textContent, "SL: -15 pips");
+      assert.equal(document.getElementById("sig-tp").textContent, "TP: +30 pips");
+      assert.equal(document.getElementById("sig-duration").textContent, "Hold: 45m");
+    });
+
+    it("renders SELL state with red pill", () => {
+      window.renderSignalData({
+        action: "SELL SIGNAL",
+        type: "SELL",
+        sl: "-22 pips",
+        tp: "+40 pips",
+        duration: "1h - 2h",
+      });
+
+      const pill = document.getElementById("trade-signal-pill");
+      assert.ok(pill.classList.contains("signal-sell"));
+      assert.ok(!pill.classList.contains("signal-buy"));
+
+      assert.equal(document.getElementById("sig-action").textContent, "SELL SIGNAL");
+    });
+
+    it("renders WAIT state with neutral pill", () => {
+      window.renderSignalData({
+        action: "NEUTRAL / WAIT",
+        type: "WAIT",
+        sl: "--",
+        tp: "--",
+        duration: "15m - 45m",
+      });
+
+      const pill = document.getElementById("trade-signal-pill");
+      assert.ok(pill.classList.contains("signal-wait"));
+      assert.ok(!pill.classList.contains("signal-buy"));
+      assert.ok(!pill.classList.contains("signal-sell"));
+
+      assert.equal(document.getElementById("sig-action").textContent, "NEUTRAL / WAIT");
+    });
+
+    it("is a no-op when the pill element is missing", () => {
+      document.body.removeChild(document.getElementById("trade-signal-pill"));
+      assert.doesNotThrow(() =>
+        window.renderSignalData({
+          action: "BUY SIGNAL",
+          type: "BUY",
+          sl: "-15",
+          tp: "+30",
+          duration: "45m",
+        })
+      );
+    });
+  });
+
+  // ── applyWsGateUpdate / applyWsSignalUpdate (WS pill refresh) ─────
+
+  describe("applyWsGateUpdate / applyWsSignalUpdate", () => {
+    // The renderSignalData "no-op when the pill element is missing" test
+    // removes #trade-signal-pill from the DOM and never restores it.  The
+    // outer beforeEach only resets the pill *if present*, so re-create it
+    // here (same re-creation convention as the other reset elements).
+    beforeEach(() => {
+      if (!document.getElementById("trade-signal-pill")) {
+        const pill = document.createElement("div");
+        pill.id = "trade-signal-pill";
+        pill.className = "signal-pill liquid-glass signal-wait";
+        pill.innerHTML =
+          '<div class="signal-badge"><span class="signal-dot"></span><span id="sig-action">SCANNING...</span></div>' +
+          '<div class="signal-details">' +
+          '<span id="sig-sl">SL: --</span><span class="sig-divider">•</span>' +
+          '<span id="sig-tp">TP: --</span><span class="sig-divider">•</span>' +
+          '<span id="sig-duration">Hold: --</span></div>';
+        document.body.appendChild(pill);
+      }
+    });
+
+    it("applyWsGateUpdate paints pills only for the selected symbol", () => {
+      // Selected symbol comes from the legacy select (first option = EURUSD)
+      document.getElementById("stake-symbol").value = "EURUSD";
+      window.applyWsGateUpdate({
+        symbol: "EURUSD",
+        gates: [true, false, true, false, true],
+      });
+
+      assert.ok(document.getElementById("gate-ema").classList.contains("passed"));
+      assert.ok(document.getElementById("gate-adx").classList.contains("failed"));
+      assert.ok(document.getElementById("gate-vol").classList.contains("failed"));
+      assert.equal(
+        document.getElementById("gateway-overall-status").textContent,
+        "3/5 MODERATE"
+      );
+    });
+
+    it("applyWsGateUpdate ignores events for other symbols", () => {
+      document.getElementById("stake-symbol").value = "EURUSD";
+      window.updateGatewayUI([true, true, true, true, true]); // baseline all-pass
+
+      // A background snapshot for GBPUSD must not overwrite the pills.
+      window.applyWsGateUpdate({
+        symbol: "GBPUSD",
+        gates: [false, false, false, false, false],
+      });
+
+      assert.ok(document.getElementById("gate-ema").classList.contains("passed"));
+      assert.equal(
+        document.getElementById("gateway-overall-status").textContent,
+        "5/5 OPTIMAL"
+      );
+    });
+
+    it("applyWsSignalUpdate renders signal for the selected symbol", () => {
+      document.getElementById("stake-symbol").value = "EURUSD";
+      window.applyWsSignalUpdate({
+        symbol: "EURUSD",
+        action: "BUY SIGNAL",
+        type: "BUY",
+        sl: "1.08450",
+        tp: "1.09000",
+        duration: "45m",
+      });
+
+      const pill = document.getElementById("trade-signal-pill");
+      assert.ok(pill.classList.contains("signal-buy"));
+      assert.equal(document.getElementById("sig-action").textContent, "BUY SIGNAL");
+    });
+
+    it("applyWsSignalUpdate ignores events for other symbols", () => {
+      document.getElementById("stake-symbol").value = "EURUSD";
+      window.calculateLocalSignalPreview("EURUSD"); // baseline WAIT
+
+      window.applyWsSignalUpdate({
+        symbol: "GBPUSD",
+        action: "SELL SIGNAL",
+        type: "SELL",
+        sl: "1.25000",
+        tp: "1.24000",
+        duration: "45m",
+      });
+
+      const pill = document.getElementById("trade-signal-pill");
+      assert.ok(pill.classList.contains("signal-wait"));
+      assert.equal(document.getElementById("sig-action").textContent, "NEUTRAL / WAIT");
+    });
+  });
+
+  // ── updateQuickStakeSetup ──────────────────────────────────────────
+
+  describe("updateQuickStakeSetup", () => {
+    afterEach(() => {
+      window.fetch = undefined;
+    });
+
+    it("fetches signal data from the API and renders it to the inline pill", async () => {
+      window.fetch = async (url) => {
+        assert.ok(url.includes("symbol=EURUSD"));
+        return {
+          ok: true,
+          json: async () => ({
+            sl: "1.0835 (-18p)",
+            tp: "1.0885 (+32p)",
+            duration: "15m - 45m",
+            type: "BUY",
+          }),
+        };
+      };
+
+      await window.updateQuickStakeSetup("EURUSD");
+
+      assert.equal(document.getElementById("qs-sl").innerHTML, "SL: <b>1.0835 (-18p)</b>");
+      assert.equal(document.getElementById("qs-tp").innerHTML, "TP: <b>1.0885 (+32p)</b>");
+      assert.equal(document.getElementById("qs-hold").innerHTML, "Hold: <b>15m - 45m</b>");
+      const pill = document.getElementById("qs-setup-pill");
+      assert.ok(pill.classList.contains("buy-active"));
+    });
+
+    it("falls back to calculateLocalSignalPreview for Gold (XAUUSD)", async () => {
+      window.fetch = async () => {
+        throw new Error("Network error");
+      };
+
+      await window.updateQuickStakeSetup("XAUUSD");
+
+      const pill = document.getElementById("qs-setup-pill");
+      assert.ok(pill.classList.contains("buy-active"));
+    });
+
+    it("falls back to calculateLocalSignalPreview for non-Gold pairs", async () => {
+      window.fetch = async () => {
+        throw new Error("Network error");
+      };
+
+      await window.updateQuickStakeSetup("GBPUSD");
+
+      const pill = document.getElementById("qs-setup-pill");
+      assert.ok(pill.classList.contains("qs-setup-capsule"));
+      assert.ok(!pill.classList.contains("buy-active"));
+      assert.ok(!pill.classList.contains("sell-active"));
+      assert.equal(document.getElementById("qs-sl").innerHTML, "SL: <b>--</b>");
+    });
+  });
+
+  // ── Smart Assist Mode Toggle ───────────────────────────────────────
+
+  describe("toggleSmartAssist", () => {
+    it("enables Smart Assist mode when checked", () => {
+      window.toggleSmartAssist(true);
+
+      const pill = document.getElementById("qs-setup-pill");
+      assert.ok(!pill.classList.contains("manual-mode"));
+
+      const label = document.getElementById("assist-status-text");
+      assert.equal(label.textContent, "SMART ASSIST");
+    });
+
+    it("disables Smart Assist mode when unchecked", () => {
+      document.getElementById("assist-status-text").textContent = "SMART ASSIST";
+      window.toggleSmartAssist(false);
+
+      const pill = document.getElementById("qs-setup-pill");
+      assert.ok(pill.classList.contains("manual-mode"));
+
+      const label = document.getElementById("assist-status-text");
+      assert.equal(label.textContent, "MANUAL ONLY");
+
+      const tg = document.getElementById("qs-targets-group");
+      assert.ok(tg.classList.contains("disabled"));
+    });
+
+    it("is enabled by default on bootstrap", () => {
+      assert.equal(window.getSmartAssistState(), true);
+    });
+  });
+
+  // ── getCalculatedTargets ───────────────────────────────────────────
+
+  describe("getCalculatedTargets", () => {
+    it("returns Gold SL/TP for XAUUSD BUY", () => {
+      var t = window.getCalculatedTargets("XAUUSD", "BUY");
+      assert.equal(t.sl, "2410.50");
+      assert.equal(t.tp, "2428.00");
+    });
+
+    it("returns Gold SL/TP for XAUUSD SELL", () => {
+      var t = window.getCalculatedTargets("XAUUSD", "SELL");
+      assert.equal(t.sl, "2428.50");
+      assert.equal(t.tp, "2410.50");
+    });
+
+    it("returns forex SL/TP for non-Gold BUY", () => {
+      var t = window.getCalculatedTargets("EURUSD", "BUY");
+      assert.equal(t.sl, "1.0835");
+      assert.equal(t.tp, "1.0885");
+    });
+
+    it("returns reversed SL/TP for non-Gold SELL", () => {
+      var t = window.getCalculatedTargets("GBPUSD", "SELL");
+      assert.equal(t.sl, "1.0885");
+      assert.equal(t.tp, "1.0835");
+    });
+  });
+
+  // ── checkAllGatesPassed ────────────────────────────────────────────
+
+  describe("checkAllGatesPassed", () => {
+    afterEach(() => {
+      window.fetch = undefined;
+    });
+
+    it("returns true when all 5 gates have 'passed' class", () => {
+      ["gate-1", "gate-2", "gate-3", "gate-4", "gate-5"].forEach(function(id) {
+        var el = document.getElementById(id);
+        if (el) el.className = "gate-pill passed";
+      });
+      assert.equal(window.checkAllGatesPassed(), true);
+    });
+
+    it("returns false when any gate has 'failed' class", () => {
+      ["gate-1", "gate-2", "gate-3"].forEach(function(id) {
+        var el = document.getElementById(id);
+        if (el) el.className = "gate-pill passed";
+      });
+      var g4 = document.getElementById("gate-4");
+      if (g4) g4.className = "gate-pill failed";
+      var g5 = document.getElementById("gate-5");
+      if (g5) g5.className = "gate-pill passed";
+      assert.equal(window.checkAllGatesPassed(), false);
+    });
+  });
+
+  // ── executeQuickStake ─────────────────────────────────────────────
+
+  describe("executeQuickStake", () => {
+    afterEach(() => {
+      window.fetch = undefined;
+      const pill = document.getElementById("qs-setup-pill");
+      if (pill) pill.className = "qs-setup-capsule";
+      window.toggleSmartAssist(true);
+    });
+
+    it("alerts and aborts when Smart Assist is on and gates fail", async () => {
+      window.fetch = async () => ({
+        ok: true,
+        json: async () => ({ gates: [true, false, true, true, false], overall: "3/5" }),
+      });
+
+      var alerted = false;
+      var originalAlert = window.alert;
+      window.alert = function(msg) { alerted = true; };
+
+      await window.executeQuickStake("BUY");
+
+      window.alert = originalAlert;
+      assert.ok(alerted, "alert should have been called");
+    });
+
+    it("executes trade with auto SL/TP when gates pass", async () => {
+      window.fetch = async () => ({
+        ok: true,
+        json: async () => ({ gates: [true, true, true, true, true], overall: "5/5 STRONG" }),
+      });
+
+      await window.executeQuickStake("BUY");
+
+      var slElem = document.getElementById("qs-sl");
+      var tpElem = document.getElementById("qs-tp");
+      assert.ok(slElem.innerHTML.includes("1.0835"));
+      assert.ok(tpElem.innerHTML.includes("1.0885"));
+
+      var pill = document.getElementById("qs-setup-pill");
+      assert.ok(pill.classList.contains("buy-active"));
+    });
+
+    it("executes raw trade when Smart Assist is off", async () => {
+      window.toggleSmartAssist(false);
+      var pill = document.getElementById("qs-setup-pill");
+      assert.ok(pill.classList.contains("manual-mode"));
+
+      await window.executeQuickStake("SELL");
+
+      assert.equal(document.getElementById("qs-sl").innerHTML, "SL: <b>--</b>");
+      assert.equal(document.getElementById("qs-tp").innerHTML, "TP: <b>--</b>");
+      assert.ok(!pill.classList.contains("buy-active"));
+      assert.ok(!pill.classList.contains("sell-active"));
     });
   });
 });

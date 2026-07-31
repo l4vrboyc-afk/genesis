@@ -138,6 +138,7 @@ async def manual_open_trade(symbol: str, direction: str, volume: float, sl: floa
             strategy="Manual Override",
             regime=orch.strategy_selector.current_regime.value if orch.strategy_selector.current_regime else "unknown",
             comment="Manual Override",
+            profile=bs.active_profile,
         )
 
         return {"ok": True, "ticket": result["ticket"], "message": f"Opened {symbol} {direction}"}

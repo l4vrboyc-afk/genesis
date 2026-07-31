@@ -46,6 +46,12 @@ except ImportError:
 # data corruption live — rather than discovering it later in the dashboard.
 PNL_TOLERANCE = 0.05
 
+# Cadence (seconds) for the background WS pill-snapshot broadcaster.
+# Independent of the 15s trading loop so the dashboard's live gate pills
+# and trade-signal pill refresh in real time even while the engine is
+# paused or between scans.
+WS_PILL_REFRESH_INTERVAL = 15
+
 
 # ── Module-level helpers (used by AsyncMt5Executor callers) ─────────────
 
@@ -204,6 +210,7 @@ class TradingOrchestrator:
         self._paused = True
         self._running = False
         self._loop_task = None
+        self._ws_pill_task = None
         self._last_run_time = None
 
         # Track (d) — Connection state tracking + kill-switch engagement.
@@ -283,6 +290,10 @@ class TradingOrchestrator:
         self._running = True
         self._paused = False
         self._loop_task = asyncio.create_task(self._main_loop())
+
+        # 5b. Start the WS pill-snapshot broadcaster (live gate + signal
+        # pills refresh in real time without a dropdown change).
+        self._ws_pill_task = asyncio.create_task(self._ws_pill_snapshot_loop())
         logger.success("[GREEN] Genesis Trading Orchestrator is running")
 
     async def stop(self):
@@ -301,6 +312,13 @@ class TradingOrchestrator:
             self._loop_task.cancel()
             try:
                 await self._loop_task
+            except asyncio.CancelledError:
+                pass
+
+        if self._ws_pill_task:
+            self._ws_pill_task.cancel()
+            try:
+                await self._ws_pill_task
             except asyncio.CancelledError:
                 pass
 
@@ -444,6 +462,154 @@ class TradingOrchestrator:
             elapsed = (datetime.now() - start_time).total_seconds()
             sleep_time = max(0.1, loop_interval - elapsed)
             await asyncio.sleep(sleep_time)
+
+    async def _ws_pill_snapshot_loop(self):
+        """Push live gate + signal pill snapshots to dashboard clients.
+
+        Runs independently of the trading loop so the header gateway pills
+        and the trade-signal pill refresh in real time without a dropdown
+        change.  Skips all work when no WebSocket client is connected (the
+        broadcast manager is a no-op then anyway) and when the dashboard
+        package isn't available (CLI-only mode).
+        """
+        while self._running:
+            try:
+                if _WS_AVAILABLE and ws_manager.active_connections:
+                    await self._broadcast_pill_snapshot()
+            except Exception as e:
+                logger.debug(f"WS pill snapshot error: {e}")
+            await asyncio.sleep(WS_PILL_REFRESH_INTERVAL)
+
+    async def _broadcast_pill_snapshot(self) -> None:
+        """Evaluate gates + signal for every trading pair and broadcast.
+
+        Reuses the same stateless dashboard evaluators as ``GET /api/
+        evaluator`` and ``GET /api/signal`` so the WebSocket push and the
+        HTTP route always agree on pill state.
+
+        Emits one ``GATE_UPDATE`` and one ``SIGNAL_UPDATE`` per pair when
+        MT5 data is available (skipped cleanly when it isn't).
+        """
+        if not _WS_AVAILABLE:
+            return
+        if not ws_manager.active_connections:
+            return
+
+        try:
+            from dashboard.backend.routes.signal import (
+                _format_price,
+                _hold_estimate,
+            )
+        except Exception as e:
+            logger.debug(f"WS pill snapshot import failed: {e}")
+            return
+
+        profile = settings.active_profile
+        for pair in settings.trading_pairs:
+            try:
+                # Same data contract as the routes (entry + higher TF frames
+                # and gatekeeper indicators), fetched through the executor.
+                gk, etf_data, htf_data = await asyncio.gather(
+                    self.fetcher.get_gatekeeper_indicators(pair),
+                    self.fetcher.get_analyzed_data(
+                        pair, settings.entry_timeframe, 120
+                    ),
+                    self.fetcher.get_analyzed_data(
+                        pair, settings.higher_timeframe, 220
+                    ),
+                )
+            except Exception as e:
+                logger.debug(f"WS pill data fetch failed for {pair}: {e}")
+                continue
+
+            # ── GATE_UPDATE ──────────────────────────────────────────
+            # Mirror the evaluator route: broadcast unless every MT5 source
+            # is unavailable (then the frontend keeps its last pills).
+            if (
+                gk
+                or (etf_data is not None and not etf_data.empty)
+                or (htf_data is not None and not htf_data.empty)
+            ):
+                try:
+                    gates = self.strategy_selector.evaluate_symbol_gates(
+                        symbol=pair,
+                        gatekeeper_data=gk,
+                        entry_tf_data=etf_data,
+                        htf_data=htf_data,
+                    )
+                    gates["profile"] = profile
+                    await ws_manager.broadcast(WSEventPayload(
+                        event_type="GATE_UPDATE",
+                        timestamp=datetime.now(timezone.utc).isoformat(),
+                        data=gates,
+                    ))
+                except Exception as e:
+                    logger.debug(f"WS GATE_UPDATE broadcast failed for {pair}: {e}")
+
+            # ── SIGNAL_UPDATE ────────────────────────────────────────
+            try:
+                current_price = await self.fetcher.get_current_price(pair)
+                if (
+                    not isinstance(current_price, dict)
+                    or "bid" not in current_price
+                    or "ask" not in current_price
+                ):
+                    # Synthesize from the latest close (mirrors the route).
+                    src = (
+                        etf_data
+                        if (etf_data is not None and not etf_data.empty)
+                        else htf_data
+                    )
+                    if src is None or src.empty:
+                        continue
+                    close = float(src["close"].iloc[-1])
+                    current_price = {"bid": close, "ask": close, "last": close}
+
+                signal = self.strategy_selector.evaluate_symbol_signal(
+                    symbol=pair,
+                    htf_data=htf_data,
+                    etf_data=etf_data,
+                    current_price=current_price,
+                )
+                duration = _hold_estimate(profile)
+
+                if signal is None:
+                    payload = {
+                        "symbol": pair,
+                        "profile": profile,
+                        "action": "NEUTRAL / WAIT",
+                        "type": "WAIT",
+                        "sl": "--",
+                        "tp": "--",
+                        "duration": duration,
+                        "entry": None,
+                        "confidence": None,
+                        "risk_reward_ratio": None,
+                        "strategy": None,
+                    }
+                else:
+                    direction = signal.direction.value.upper()
+                    payload = {
+                        "symbol": pair,
+                        "profile": profile,
+                        "action": f"{direction} SIGNAL",
+                        "type": direction,
+                        "sl": _format_price(signal.stop_loss, pair),
+                        "tp": _format_price(signal.take_profit, pair),
+                        "duration": duration,
+                        "entry": _format_price(signal.entry_price, pair),
+                        "confidence": signal.confidence,
+                        "risk_reward_ratio": signal.risk_reward_ratio,
+                        "strategy": signal.strategy_name,
+                    }
+
+                await ws_manager.broadcast(WSEventPayload(
+                    event_type="SIGNAL_UPDATE",
+                    timestamp=datetime.now(timezone.utc).isoformat(),
+                    data=payload,
+                ))
+            except Exception as e:
+                logger.debug(f"WS SIGNAL_UPDATE broadcast failed for {pair}: {e}")
 
     async def _handle_connection_state(self) -> bool:
         """Track connection state across cycles (Track d).
@@ -1054,6 +1220,7 @@ class TradingOrchestrator:
                 strategy=signal.strategy_name,
                 regime=self.strategy_selector.current_regime.value,
                 comment=trade_result["comment"],
+                profile=settings.active_profile,
             )
 
             await notification_manager.notify_trade_open({
@@ -1479,6 +1646,7 @@ class TradingOrchestrator:
                     strategy="Sync Recovered",
                     regime="ranging",
                     comment=pos["comment"] or "Recovered position",
+                    profile=settings.active_profile,
                 )
 
     # ── Closed Trade History (MT5 direct fetch) ───────────────────────

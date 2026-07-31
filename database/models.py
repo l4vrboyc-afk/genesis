@@ -61,6 +61,11 @@ class TradeLog(Base):
     close_time = Column(DateTime, nullable=True)
     strategy = Column(String(50), nullable=True)
     market_regime = Column(String(30), nullable=True)
+    # Profile key that opened this trade (backend key like "daytrader" or
+    # front-end key like "day_trader"; the UI maps backend keys via
+    # backendProfileKeyToFrontend).  NULL for legacy rows — front-end falls
+    # back to strategy-name scoping.
+    profile = Column(String(30), nullable=True)
     status = Column(String(20), default="open", nullable=False)  # "open", "closed"
     position_value_usd = Column(Float, default=0.0, nullable=False)
     return_r = Column(Float, default=0.0, nullable=False)
@@ -92,6 +97,7 @@ class TradeLog(Base):
             "close_time": self.close_time.isoformat() if self.close_time else None,
             "strategy": self.strategy,
             "market_regime": self.market_regime,
+            "profile": self.profile,
             "status": self.status,
             "position_value_usd": pos_value or 0.0,
             "return_r": self.return_r,

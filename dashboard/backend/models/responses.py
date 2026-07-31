@@ -55,6 +55,14 @@ class TradeResponse(BaseModel):
     close_time: Optional[str] = None
     strategy: Optional[str] = None
     market_regime: Optional[str] = None
+    profile: Optional[str] = Field(
+        default=None,
+        description=(
+            "Profile key that opened the trade (backend key from settings, e.g. "
+            "daytrader/default/scalper/breakout — the UI maps it via "
+            "backendProfileKeyToFrontend); null for legacy rows"
+        ),
+    )
     status: str = Field(description='"open" or "closed"')
     position_value_usd: float = Field(
         default=0.0,

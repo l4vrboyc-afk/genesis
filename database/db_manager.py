@@ -53,6 +53,7 @@ class DatabaseManager:
                     "ALTER TABLE trade_logs ADD COLUMN close_comment VARCHAR(200)",
                     "ALTER TABLE trade_logs ADD COLUMN position_value_usd FLOAT DEFAULT 0.0",
                     "ALTER TABLE trade_logs ADD COLUMN return_r FLOAT DEFAULT 0.0",
+                    "ALTER TABLE trade_logs ADD COLUMN profile VARCHAR(30)",
                 ]
                 for stmt in migration_stmts:
                     try:
@@ -86,6 +87,7 @@ class DatabaseManager:
         swap: float = 0.0,
         position_value_usd: float = 0.0,
         return_r: float = 0.0,
+        profile: str = "",
     ) -> Optional[TradeLog]:
         """Atomically record a completed trade (open + close in one transaction).
 
@@ -113,6 +115,7 @@ class DatabaseManager:
                     tp=tp,
                     strategy=strategy,
                     market_regime=regime,
+                    profile=profile or None,
                     entry_comment=entry_comment,
                     close_comment=close_comment or "Closed",
                     comment=close_comment or entry_comment or "Closed",
@@ -144,6 +147,7 @@ class DatabaseManager:
         strategy: str,
         regime: str,
         comment: str = "",
+        profile: str = "",
     ) -> Optional[TradeLog]:
         """Record a newly opened position in the database."""
         async with self.async_session() as session:
@@ -158,6 +162,7 @@ class DatabaseManager:
                     tp=tp,
                     strategy=strategy,
                     market_regime=regime,
+                    profile=profile or None,
                     entry_comment=comment,
                     comment=comment,  # Legacy column — keep in sync
                     open_time=datetime.utcnow(),

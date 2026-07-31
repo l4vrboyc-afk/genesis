@@ -102,6 +102,422 @@ class TestStrategySelector(unittest.TestCase):
         self.assertEqual(regime, MarketRegime.VOLATILE)
 
 
+class TestSymbolGateEvaluator(unittest.TestCase):
+    """Test the dashboard 5-gateway symbol evaluator (EMA/ADX/RSI/VOL/REG).
+
+    ``StrategySelector.evaluate_symbol_gates`` powers ``GET /api/evaluator``
+    so the header gateway pills update from real MT5 data on every dropdown
+    symbol change.  The method must be **stateless** (unlike
+    ``detect_regime``) so read-only dashboard calls never mutate hysteresis
+    state.
+    """
+
+    def setUp(self):
+        self.selector = StrategySelector()
+
+    @staticmethod
+    def _gk(adx=30.0, ema_50=1.1000, atr=0.0020, close=1.1200):
+        """Canonical gatekeeper dict (keys match get_gatekeeper_indicators)."""
+        return {"adx": adx, "ema_50": ema_50, "atr": atr, "close": close}
+
+    @staticmethod
+    def _htf(close=1.1200, ema_200=1.0900, adx=30.0, atr_ratio=1.0):
+        """Analyzed HTF DataFrame (columns produced by calculate_indicators).
+
+        Defaults form a clean bullish stack (close > ema_50 > ema_200) so
+        the EMA gate passes out-of-the-box.
+        """
+        return pd.DataFrame([{
+            "close": close, "ema_200": ema_200,
+            "adx": adx, "atr_ratio": atr_ratio,
+        }])
+
+    @staticmethod
+    def _etf(rsi=55.0, volume=4000.0):
+        """Analyzed entry-TF DataFrame with a 20-bar history (all columns
+        share the same length so pandas accepts the constructor).
+
+        Default volume 4000 vs 2000 baseline → 2.0× surge, above the 1.5×
+        ``volume_surge_ratio`` gate threshold.
+        """
+        vol_series = [2000.0] * 19 + [volume]
+        rsi_series = [rsi] * 20
+        return pd.DataFrame({
+            "rsi_14": rsi_series,
+            "volume": vol_series,
+        })
+
+    def test_all_five_gates_pass_with_healthy_data(self):
+        result = self.selector.evaluate_symbol_gates(
+            "EURUSD", self._gk(), self._etf(), self._htf()
+        )
+        self.assertEqual(len(result["gates"]), 5)
+        self.assertEqual(result["passed"], 5)
+        self.assertTrue(result["overall"].startswith("5/5"))
+        # Pill order: [EMA, ADX, RSI, VOL, REG]
+        self.assertEqual(result["gates"], [True, True, True, True, True])
+
+    def test_ema_gate_fails_when_price_not_stacked(self):
+        # close (1.1200) > ema_50 (1.1000) but EMA200 is above the EMA50
+        # (1.1100) → neither bull nor bear stack → gate fails.
+        gk = self._gk(ema_50=1.1000, close=1.1200)
+        htf = self._htf(close=1.1200, ema_200=1.1100)
+        result = self.selector.evaluate_symbol_gates("EURUSD", gk, self._etf(), htf)
+        self.assertFalse(result["gates"][0])
+
+    def test_adx_gate_fails_below_conviction(self):
+        gk = self._gk(adx=15.0)
+        htf = self._htf(adx=15.0)
+        result = self.selector.evaluate_symbol_gates("EURUSD", gk, self._etf(), htf)
+        self.assertFalse(result["gates"][1])
+
+    def test_rsi_gate_fails_when_overbought(self):
+        result = self.selector.evaluate_symbol_gates(
+            "EURUSD", self._gk(), self._etf(rsi=85.0), self._htf()
+        )
+        self.assertFalse(result["gates"][2])
+
+    def test_volume_gate_fails_without_surge(self):
+        # Latest volume (2100) vs 20-bar mean (2000) → 1.05× < 1.5× surge.
+        result = self.selector.evaluate_symbol_gates(
+            "EURUSD", self._gk(), self._etf(volume=2100.0), self._htf()
+        )
+        self.assertFalse(result["gates"][3])
+
+    def test_regime_gate_fails_on_dead_market(self):
+        # adx=22 sits in the in-between band (20 <= adx <= 25) with a very
+        # low ATR ratio → _classify_regime returns DEAD → gate fails.
+        htf = self._htf(adx=22.0, atr_ratio=0.3)
+        result = self.selector.evaluate_symbol_gates("EURUSD", self._gk(), self._etf(), htf)
+        self.assertFalse(result["gates"][4])
+
+    def test_fails_open_when_data_unavailable(self):
+        """Missing data must never crash the dashboard route — fail-open."""
+        result = self.selector.evaluate_symbol_gates(
+            "EURUSD", None, None, None
+        )
+        self.assertEqual(result["gates"], [True, True, True, True, True])
+        self.assertEqual(result["passed"], 5)
+
+    def test_is_stateless_does_not_mutate_regime(self):
+        """Calling the evaluator must not disturb selector hysteresis state."""
+        self.selector._current_regime = MarketRegime.TRENDING
+        self.selector._candidate_regime = None
+        self.selector.evaluate_symbol_gates(
+            "EURUSD", self._gk(), self._etf(), self._htf()
+        )
+        self.assertEqual(self.selector._current_regime, MarketRegime.TRENDING)
+        self.assertIsNone(self.selector._candidate_regime)
+
+
+class TestSymbolSignalEvaluator(unittest.TestCase):
+    """Test the dashboard live signal evaluator (powers GET /api/signal).
+
+    ``StrategySelector.evaluate_symbol_signal`` mirrors ``get_signal`` but
+    must be **stateless** (no regime hysteresis mutation, no WS/Discord
+    side effects) so the read-only dashboard route is safe to call on every
+    dropdown symbol change.
+    """
+
+    def setUp(self):
+        self.selector = StrategySelector()
+
+    @staticmethod
+    def _htf(adx=30.0, atr_ratio=1.0):
+        """Analyzed HTF DataFrame with the columns generate_signal reads."""
+        return pd.DataFrame([{
+            "adx": adx, "atr_ratio": atr_ratio, "close": 1.1200,
+        }])
+
+    @staticmethod
+    def _price():
+        return {"bid": 1.1200, "ask": 1.1202, "last": 1.1201}
+
+    def _fake_strategy(self, signal=None):
+        """A strategy stub that returns the given signal (or None)."""
+        stub = MagicMock()
+        stub.generate_signal.return_value = signal
+        return stub
+
+    def test_returns_none_when_htf_empty(self):
+        self.assertIsNone(self.selector.evaluate_symbol_signal(
+            "EURUSD", None, None, self._price()
+        ))
+
+    def test_returns_none_on_dead_regime(self):
+        """adx=22 (in-between band) + very low ATR ratio → DEAD → no trade."""
+        htf = self._htf(adx=22.0, atr_ratio=0.3)
+        self.assertIsNone(self.selector.evaluate_symbol_signal(
+            "EURUSD", htf, None, self._price()
+        ))
+
+    def test_delegates_to_profile_strategy_and_returns_signal(self):
+        """Trending HTF → profile strategy chosen → its signal returned."""
+        signal = TradeSignal(
+            direction=TradeDirection.BUY,
+            symbol="EURUSD",
+            entry_price=1.1200,
+            stop_loss=1.1100,
+            take_profit=1.1400,
+            confidence=0.7,
+            strategy_name="TestStrategy",
+        )
+        fake = self._fake_strategy(signal)
+        self.selector.strategies = {MarketRegime.TRENDING: fake}
+
+        result = self.selector.evaluate_symbol_signal(
+            "EURUSD", self._htf(), None, self._price()
+        )
+        self.assertIs(result, signal)
+        fake.generate_signal.assert_called_once()
+
+    def test_returns_none_when_strategy_has_no_signal(self):
+        fake = self._fake_strategy(None)
+        self.selector.strategies = {MarketRegime.TRENDING: fake}
+        result = self.selector.evaluate_symbol_signal(
+            "EURUSD", self._htf(), None, self._price()
+        )
+        self.assertIsNone(result)
+        fake.generate_signal.assert_called_once()
+
+    def test_is_stateless_does_not_mutate_regime(self):
+        """Signal evaluation must never disturb the live hysteresis state."""
+        self.selector._current_regime = MarketRegime.RANGING
+        self.selector._candidate_regime = MarketRegime.TRENDING
+        fake = self._fake_strategy(None)
+        self.selector.strategies = {MarketRegime.TRENDING: fake}
+
+        self.selector.evaluate_symbol_signal(
+            "EURUSD", self._htf(), None, self._price()
+        )
+
+        self.assertEqual(self.selector._current_regime, MarketRegime.RANGING)
+        self.assertEqual(self.selector._candidate_regime, MarketRegime.TRENDING)
+
+
+class TestEvaluatorRoute503(unittest.TestCase):
+    """Route-level test for ``GET /api/evaluator`` 503 fallback semantics.
+
+    The dashboard frontend treats a 503 as "MT5 is down → simulate" — it
+    MUST NOT see stale all-pass pills.  These tests drive the real FastAPI
+    route (not the evaluator method) through a mocked orchestrator to lock
+    down the contract:
+
+    - orchestrator missing / not ready      → 503 "Orchestrator not ready"
+    - all three MT5 sources unavailable     → 503 "MT5 market data unavailable"
+    - partial data (one source available)   → 200 (fail-open, never 503)
+    - healthy data                          → 200 with 5 gates
+    """
+
+    @staticmethod
+    def _make_app(orchestrator):
+        """Build a minimal FastAPI app with only the evaluator route."""
+        from fastapi import FastAPI
+        from dashboard.backend.routes.evaluator import register_routes
+
+        app = FastAPI()
+        app.state.orchestrator = orchestrator
+        register_routes(app)
+        return app
+
+    @staticmethod
+    def _make_orchestrator(fetcher, selector):
+        """Orchestrator stub carrying the fetcher + strategy selector the
+        route reaches through ``app.state.orchestrator``."""
+        return MagicMock(fetcher=fetcher, strategy_selector=selector)
+
+    @staticmethod
+    def _all_unavailable_fetcher():
+        """Fetcher whose every data source returns None — the all-MT5-down
+        case that must map to 503."""
+        fetcher = MagicMock()
+        fetcher.get_gatekeeper_indicators = AsyncMock(return_value=None)
+        fetcher.get_analyzed_data = AsyncMock(return_value=None)
+        return fetcher
+
+    @staticmethod
+    def _healthy_fetcher():
+        """Fetcher returning gatekeeper dict + non-empty frames."""
+        import pandas as pd
+
+        fetcher = MagicMock()
+        fetcher.get_gatekeeper_indicators = AsyncMock(
+            return_value={"adx": 30.0, "ema_50": 1.1000, "atr": 0.0020, "close": 1.1200}
+        )
+        htf = pd.DataFrame([{"close": 1.1200, "ema_200": 1.0900, "adx": 30.0, "atr_ratio": 1.0}])
+        etf = pd.DataFrame({"rsi_14": [55.0] * 20, "volume": [2000.0] * 19 + [4000.0]})
+        # Route passes bot_settings.{entry,higher}_timeframe — match on the
+        # configured values so the test is robust to profile overrides.
+        etf_tf = settings.entry_timeframe
+        htf_tf = settings.higher_timeframe
+        fetcher.get_analyzed_data = AsyncMock(
+            side_effect=lambda sym, tf, count: htf if tf == htf_tf else etf if tf == etf_tf else None
+        )
+        return fetcher
+
+    def _get(self, orch, symbol="EURUSD"):
+        """Run GET /api/evaluator through the real route + TestClient."""
+        from fastapi.testclient import TestClient
+        with TestClient(self._make_app(orch)) as client:
+            return client.get(f"/api/evaluator?symbol={symbol}")
+
+    def test_503_when_orchestrator_missing(self):
+        """No orchestrator on app.state → 503 Orchestrator not ready."""
+        resp = self._get(None)
+        self.assertEqual(resp.status_code, 503)
+        self.assertIn("Orchestrator not ready", resp.json()["detail"])
+
+    def test_503_when_orchestrator_parts_missing(self):
+        """Orchestrator present but fetcher missing → still 503 (not 500)."""
+        orch = MagicMock(fetcher=None, strategy_selector=MagicMock())
+        resp = self._get(orch)
+        self.assertEqual(resp.status_code, 503)
+        self.assertIn("Orchestrator not ready", resp.json()["detail"])
+
+    def test_503_when_all_mt5_data_unavailable(self):
+        """Every MT5 source empty → 503 MT5 market data unavailable so the
+        frontend falls back to simulation instead of painting all-pass pills."""
+        fetcher = self._all_unavailable_fetcher()
+        orch = self._make_orchestrator(fetcher, MagicMock())
+        resp = self._get(orch)
+        self.assertEqual(resp.status_code, 503)
+        self.assertIn("MT5 market data unavailable", resp.json()["detail"])
+
+    def test_200_with_partial_data_fails_open(self):
+        """Gatekeeper present but frames missing → 200 (never 503) — the
+        evaluator fails open on partial data."""
+        fetcher = MagicMock()
+        fetcher.get_gatekeeper_indicators = AsyncMock(
+            return_value={"adx": 30.0, "ema_50": 1.1000, "atr": 0.0020, "close": 1.1200}
+        )
+        fetcher.get_analyzed_data = AsyncMock(return_value=None)  # frames missing
+        selector = MagicMock()
+        selector.evaluate_symbol_gates.return_value = {
+            "gates": [True, True, True, True, True],
+            "passed": 5, "total": 5, "overall": "5/5 OPTIMAL",
+            "details": {}, "symbol": "EURUSD",
+        }
+        orch = self._make_orchestrator(fetcher, selector)
+        resp = self._get(orch)
+        self.assertEqual(resp.status_code, 200)
+        body = resp.json()
+        self.assertEqual(len(body["gates"]), 5)
+        selector.evaluate_symbol_gates.assert_called_once()
+
+    def test_200_healthy_path_returns_five_gates(self):
+        """Real evaluator method + healthy data → 200 with 5 gates in pill
+        order [EMA, ADX, RSI, VOL, REG] and profile echoed."""
+        fetcher = self._healthy_fetcher()
+        orch = self._make_orchestrator(fetcher, StrategySelector())
+        resp = self._get(orch, symbol="EURUSD")
+        self.assertEqual(resp.status_code, 200)
+        body = resp.json()
+        self.assertEqual(body["symbol"], "EURUSD")
+        self.assertEqual(len(body["gates"]), 5)
+        self.assertEqual(body["gates"], [True, True, True, True, True])
+        self.assertEqual(body["passed"], 5)
+        self.assertTrue(body["overall"].startswith("5/5"))
+        self.assertIn("profile", body)
+
+    def test_500_when_evaluator_raises(self):
+        """Unexpected evaluator failure → 500 with detail (never a masked
+        503 or a bare exception escaping the route)."""
+        fetcher = self._all_unavailable_fetcher()
+        selector = MagicMock()
+        selector.evaluate_symbol_gates.side_effect = RuntimeError("boom")
+        # Fetcher returns None for frames, but gatekeeper present → passes
+        # the 503 guard so the exception path (500) is actually reached.
+        fetcher.get_gatekeeper_indicators = AsyncMock(
+            return_value={"adx": 30.0, "ema_50": 1.1000, "atr": 0.0020, "close": 1.1200}
+        )
+        orch = self._make_orchestrator(fetcher, selector)
+        resp = self._get(orch)
+        self.assertEqual(resp.status_code, 500)
+        self.assertIn("boom", resp.json()["detail"])
+
+
+class TestWsPillSnapshotBroadcast(unittest.IsolatedAsyncioTestCase):
+    """The orchestrator's WS pill-snapshot broadcaster pushes live
+    ``GATE_UPDATE`` + ``SIGNAL_UPDATE`` events to connected dashboard
+    clients so the header pills refresh in real time without a dropdown
+    change.
+
+    The broadcaster reuses the same stateless evaluators that power
+    ``GET /api/evaluator`` and ``GET /api/signal``, so the WebSocket push
+    and the HTTP route always agree on pill state.
+    """
+
+    async def asyncSetUp(self):
+        from bot.core.orchestrator import TradingOrchestrator
+
+        self.orch = TradingOrchestrator()
+
+        # ── Healthy fetcher (all sources return live data) ───────────
+        self.orch.fetcher = MagicMock()
+        self.orch.fetcher.get_gatekeeper_indicators = AsyncMock(
+            return_value={"adx": 30.0, "ema_50": 1.1000, "atr": 0.0020, "close": 1.1200}
+        )
+        htf = pd.DataFrame([{"close": 1.1200, "ema_200": 1.0900, "adx": 30.0, "atr_ratio": 1.0}])
+        etf = pd.DataFrame({"rsi_14": [55.0] * 20, "volume": [2000.0] * 19 + [4000.0]})
+        etf_tf = settings.entry_timeframe
+        htf_tf = settings.higher_timeframe
+        self.orch.fetcher.get_analyzed_data = AsyncMock(
+            side_effect=lambda sym, tf, count: htf if tf == htf_tf else etf if tf == etf_tf else None
+        )
+        self.orch.fetcher.get_current_price = AsyncMock(
+            return_value={"bid": 1.1200, "ask": 1.1202, "last": 1.1201}
+        )
+
+        # Real (stateless) evaluator — proves the broadcast uses the same
+        # logic the HTTP routes use.
+        self.orch.strategy_selector = StrategySelector()
+
+        # ── Capture orchestrator WS broadcasts ───────────────────────
+        self._sent = []
+        self._ws_patcher = patch("bot.core.orchestrator.ws_manager")
+        self._ws = self._ws_patcher.start()
+        self._ws.active_connections = [object()]  # truthy → broadcast runs
+
+        async def _fake_broadcast(event):
+            self._sent.append(event)
+
+        self._ws.broadcast = _fake_broadcast
+
+    async def asyncTearDown(self):
+        self._ws_patcher.stop()
+
+    async def _run_snapshot(self, pairs):
+        with patch.object(settings, "trading_pairs", pairs):
+            await self.orch._broadcast_pill_snapshot()
+
+    async def test_broadcasts_gate_and_signal_updates(self):
+        """Healthy data → both GATE_UPDATE and SIGNAL_UPDATE emitted for
+        the trading pair, with the dashboard pill shapes."""
+        await self._run_snapshot(["EURUSD"])
+
+        types = [e.event_type for e in self._sent]
+        self.assertIn("GATE_UPDATE", types)
+        self.assertIn("SIGNAL_UPDATE", types)
+
+        gate = next(e for e in self._sent if e.event_type == "GATE_UPDATE")
+        self.assertEqual(gate.data["symbol"], "EURUSD")
+        self.assertEqual(len(gate.data["gates"]), 5)
+        self.assertEqual(gate.data["passed"], 5)
+        self.assertIn("profile", gate.data)
+
+        sig = next(e for e in self._sent if e.event_type == "SIGNAL_UPDATE")
+        self.assertEqual(sig.data["symbol"], "EURUSD")
+        self.assertIn("type", sig.data)  # 'BUY' | 'SELL' | 'WAIT'
+        self.assertIn("action", sig.data)
+        self.assertIn("duration", sig.data)
+
+    async def test_skips_all_work_when_no_clients_connected(self):
+        """No WebSocket clients → nothing is broadcast (zero-overhead)."""
+        self._ws.active_connections = []
+        await self._run_snapshot(["EURUSD"])
+        self.assertEqual(self._sent, [])
+
+
 class TestRiskManager(unittest.TestCase):
     """Test risk controls filter invalid trades."""
 
@@ -231,6 +647,55 @@ class TestDatabaseManager(unittest.IsolatedAsyncioTestCase):
         closed_trade = next(t for t in all_trades if t.ticket == 8888)
         self.assertEqual(closed_trade.position_value_usd, 50000.0)
         self.assertAlmostEqual(closed_trade.return_r, 2.50, places=2)
+
+    async def test_record_trade_open_persists_profile(self):
+        """record_trade_open stores the profile tag and to_dict / DB reads
+        round-trip it — history scoping is exact via the profile column."""
+        trade = await self.db.record_trade_open(
+            ticket=7777,
+            symbol="EURUSD",
+            direction="buy",
+            volume=0.1,
+            entry_price=1.1000,
+            sl=1.0900,
+            tp=1.1200,
+            strategy="Trend Engine",
+            regime="trending",
+            comment="Test open",
+            profile="day_trader",
+        )
+        self.assertIsNotNone(trade)
+        self.assertEqual(trade.profile, "day_trader")
+        self.assertEqual(trade.to_dict()["profile"], "day_trader")
+
+        # Verify via DB read too
+        open_trades = await self.db.get_open_trades()
+        read_back = next(t for t in open_trades if t.ticket == 7777)
+        self.assertEqual(read_back.profile, "day_trader")
+
+        # Close keeps the tag intact
+        closed = await self.db.record_trade_close(
+            ticket=7777, exit_price=1.1200, profit=200.0,
+        )
+        self.assertEqual(closed.profile, "day_trader")
+
+    async def test_record_trade_open_profile_defaults_to_none(self):
+        """Omitting profile stores NULL (legacy rows stay None) — the
+        front-end falls back to strategy-name scoping for these."""
+        trade = await self.db.record_trade_open(
+            ticket=6666,
+            symbol="EURUSD",
+            direction="buy",
+            volume=0.1,
+            entry_price=1.1000,
+            sl=1.0900,
+            tp=1.1200,
+            strategy="Scalper Momentum",
+            regime="trending",
+        )
+        self.assertIsNotNone(trade)
+        self.assertIsNone(trade.profile)
+        self.assertIsNone(trade.to_dict()["profile"])
 
 
 # ─────────────────────────────────────────────────────────────────────

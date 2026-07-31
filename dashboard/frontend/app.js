@@ -9,6 +9,7 @@ const LEVERAGE = 100; // Account leverage ratio
 let mainChart = null;
 let modalChart = null;
 let isEngineRunning = false;
+let selectedSymbol = 'XAUUSD';
 let livePositions = [];
 let liveTimer = null;
 let historyTimer = null;
@@ -18,6 +19,10 @@ let posCandleChart = null;
 let posChartTimer = null;
 let posChartSymbol = null;
 let posChartTF = 'M1';
+let gatewayDebounceTimer = null;
+let _gatewayRequestSymbol = null;
+let gatewayDebounceMs = 250;
+let _tickerPrices = {};
 
 /* ── Trading Profiles Dictionary ──────────────────────────────────── */
 
@@ -62,6 +67,174 @@ const TRADING_PROFILES = {
 };
 
 let activeProfile = 'swing_trader';
+
+/* ── Profile Strategy Scoping ────────────────────────────────────── */
+
+/**
+ * Maps each front-end profile key to the bot strategy names that can
+ * produce trades under it (mirrors bot/strategies/strategy_selector.py).
+ * Trade/position records carry a `strategy` / `comment` tag — history and
+ * positions are scoped strictly to the active profile via these names.
+ */
+const PROFILE_STRATEGIES = {
+  swing_trader: ['Smart Trend Breakout', 'Mean Reversion'],
+  range_scalper: ['Scalper Momentum'],
+  breakout_hunter: ['Session Breakout'],
+  day_trader: ['Trend Engine', 'Mean Reversion', 'Session Breakout'],
+};
+
+/**
+ * Strategy tags that carry no profile attribution — dashboard manual
+ * orders ("Manual Override") and MT5 resync re-logs ("Sync Recovered").
+ * Always kept visible so they never disappear from the log.
+ */
+const UNATTRIBUTED_STRATEGIES = ['Manual Override', 'Sync Recovered'];
+
+/**
+ * Returns the currently active profile key (module state, test-friendly).
+ */
+function getActiveProfile() {
+  return activeProfile;
+}
+
+/**
+ * Maps the backend's ``active_profile`` value (default / scalper /
+ * breakout / daytrader) onto the front-end profile keys used by
+ * TRADING_PROFILES (swing_trader / range_scalper / breakout_hunter /
+ * day_trader). Returns null when the backend value has no front-end
+ * equivalent so callers can ignore it safely.
+ */
+function backendProfileKeyToFrontend(backendKey) {
+  const map = {
+    default: 'swing_trader',
+    scalper: 'range_scalper',
+    breakout: 'breakout_hunter',
+    daytrader: 'day_trader',
+  };
+  return map[String(backendKey || '').toLowerCase()] || null;
+}
+
+/**
+ * Human-readable display name for the active profile (e.g. "Swing Trader").
+ */
+function getProfileName() {
+  const key = getActiveProfile();
+  return (TRADING_PROFILES[key] && TRADING_PROFILES[key].name) || key;
+}
+
+/**
+ * Returns the strategy names that belong to the given profile key
+ * (plus the un-attributed tags that stay visible everywhere).
+ */
+function strategiesForProfile(profileKey) {
+  const key = profileKey || getActiveProfile();
+  const owned = PROFILE_STRATEGIES[key] || [];
+  return owned.concat(UNATTRIBUTED_STRATEGIES);
+}
+
+/**
+ * True when a trade / position record belongs to the active profile.
+ *
+ * Exact scoping comes first: when the record carries a ``profile`` tag
+ * (the new trade_logs.profile column), it wins outright — no strategy
+ * inference needed. The stored value may use the backend's key
+ * (default/scalper/breakout/daytrader) so it is mapped to the front-end
+ * key before comparison, and an exact match is also accepted directly
+ * (covers records already tagged with the front-end key).
+ *
+ * Fallback for legacy rows (no ``profile`` tag): attribute via
+ * ``strategy`` (history) or ``comment`` (positions, e.g. "Trend Engine
+ * entry"). Records with no attribution tag stay visible.
+ */
+function recordBelongsToProfile(record, profileKey) {
+  if (!record) return true;
+  const key = profileKey || getActiveProfile();
+
+  if (record.profile) {
+    const stored = String(record.profile);
+    const mapped = backendProfileKeyToFrontend(stored);
+    return (mapped || stored) === key;
+  }
+
+  const strategies = strategiesForProfile(key);
+  if (!strategies) return true; // unknown profile → don't hide anything
+  const tag = String(record.strategy || record.comment || '');
+  if (!tag) return true; // un-attributed → keep visible
+  return strategies.some(s => tag.indexOf(s) !== -1);
+}
+
+/**
+ * Computes win/loss statistics from a closed-trade list, scoped to the
+ * active profile by the caller. Used by the extended History modal so its
+ * metrics reflect exactly the profile-scoped rows shown in the table.
+ *
+ * - ``avgRr`` is the mean realised R-multiple (``return_r``) — mirrors the
+ *   backend's ``avg_rr``.
+ * - ``maxDrawdown`` is the largest peak-to-trough decline on the
+ *   cumulative PnL curve, ordered chronologically by close time and
+ *   expressed as a % of the running peak (0 when the curve never goes
+ *   positive). No global account data is involved, so both stay strictly
+ *   scoped to the active profile's trades.
+ *
+ * @param {Array} trades - Closed trade records with ``profit`` / ``return_r``.
+ * @returns {{total:number, winRate:string, totalPnl:number,
+ *   profitFactor:string, avgWin:number, avgLoss:number,
+ *   avgRr:number, maxDrawdown:number}}
+ */
+function computeScopedStats(trades) {
+  const list = trades || [];
+  const wins = list.filter(t => Number(t.profit) > 0);
+  const losses = list.filter(t => Number(t.profit) < 0);
+  const totalPnl = list.reduce((sum, t) => sum + (Number(t.profit) || 0), 0);
+  const grossWin = wins.reduce((sum, t) => sum + Number(t.profit), 0);
+  const grossLoss = Math.abs(losses.reduce((sum, t) => sum + Number(t.profit), 0));
+  const winRate = list.length ? (wins.length / list.length) * 100 : 0;
+  const profitFactor = grossLoss > 0 ? (grossWin / grossLoss).toFixed(2) : (grossWin > 0 ? '∞' : '0.00');
+
+  // Avg R:R — mean achieved risk:reward across the scoped trades,
+  // mirroring the backend's avg_rr. The backend averages positive
+  // ``achieved_rr`` (|move| / |risk|, always ≥ 0) — the frontend only has
+  // the signed ``return_r`` (profit / risk), so we mirror it by averaging
+  // the magnitudes of non-zero return_r values.
+  const rrValues = list.map(t => Math.abs(Number(t.return_r))).filter(v => isFinite(v) && v > 0);
+  const avgRr = rrValues.length
+    ? Math.round((rrValues.reduce((a, b) => a + b, 0) / rrValues.length) * 100) / 100
+    : 0;
+
+  // Max drawdown — walk the cumulative PnL curve in close-time order and
+  // track the largest (peak − running) / peak drop in percent.
+  const ordered = list.slice().sort((a, b) => {
+    const ta = new Date(a.close_time || a.open_time || 0).getTime() || 0;
+    const tb = new Date(b.close_time || b.open_time || 0).getTime() || 0;
+    return ta - tb;
+  });
+  let running = 0;
+  let peak = 0;
+  let maxDrawdown = 0;
+  for (const t of ordered) {
+    running += Number(t.profit) || 0;
+    if (running > peak) peak = running;
+    if (peak > 0) {
+      // Clamp at 100: the PnL-only curve (no starting balance) can dip
+      // negative after a positive peak, which would otherwise produce an
+      // impossible-looking drawdown > 100%.
+      const dd = Math.min(((peak - running) / peak) * 100, 100);
+      if (dd > maxDrawdown) maxDrawdown = dd;
+    }
+  }
+  maxDrawdown = Math.round(maxDrawdown * 100) / 100;
+
+  return {
+    total: list.length,
+    winRate: winRate.toFixed(1),
+    totalPnl,
+    profitFactor,
+    avgWin: wins.length ? grossWin / wins.length : 0,
+    avgLoss: losses.length ? grossLoss / losses.length : 0,
+    avgRr,
+    maxDrawdown,
+  };
+}
 
 /* ── Small helpers ───────────────────────────────────────────────── */
 
@@ -142,6 +315,12 @@ function updateLotConversionPreview() {
 
   const el = document.getElementById('calculated-lots-preview');
   if (el) el.innerText = `${lots} Lots`;
+
+  // Keep the BUY / SELL button stake amounts in sync with the input
+  // (whole dollars stay clean, fractional stakes show 2 decimals)
+  document.querySelectorAll('.stake-val').forEach(function(span) {
+    span.textContent = Number.isInteger(stakeUSD) ? String(stakeUSD) : stakeUSD.toFixed(2);
+  });
 }
 
 /**
@@ -150,7 +329,8 @@ function updateLotConversionPreview() {
  * then logs the order and notifies the user.
  */
 function executeStakeTrade(direction) {
-  const symbol = document.getElementById('stake-symbol').value;
+  const selectElem = document.getElementById('stake-symbol');
+  const symbol = selectElem && selectElem.value ? selectElem.value : selectedSymbol;
   const stakeUSD = document.getElementById('stake-amount-usd').value;
   const lots = document.getElementById('calculated-lots-preview').innerText;
 
@@ -172,6 +352,14 @@ if (typeof window !== 'undefined') {
     if (wrapper && !wrapper.contains(e.target)) {
       const dropdown = document.getElementById('tools-dropdown');
       if (dropdown) dropdown.classList.add('hidden');
+    }
+
+    // Custom liquid symbol dropdown — close when clicking anywhere outside
+    const symDropdown = document.getElementById('symbol-dropdown');
+    if (symDropdown && !symDropdown.contains(e.target)) {
+      const menuList = document.getElementById('symbol-menu-list');
+      if (menuList) menuList.classList.remove('open');
+      symDropdown.classList.remove('open');
     }
   });
 }
@@ -535,8 +723,11 @@ function selectProfile(profileKey) {
     localStorage.setItem('genesis_active_profile', profileKey);
   }
 
-  // Re-populate the execution symbol dropdown with this profile's pairs
-  populateSymbolDropdown(TRADING_PROFILES[profileKey].pairs);
+  // Delegate to the shared profile-switch path — it re-renders every
+  // profile-dependent module (dropdown, ticker bar, history, quick stake)
+  // and persists the choice, so selectProfile and external profile changes
+  // stay on one code path.
+  onProfileChange(profileKey);
 
   // Only navigate in a real browser. jsdom sets its user-agent to contain
   // "jsdom", which we use to skip navigation in tests.
@@ -547,20 +738,116 @@ function selectProfile(profileKey) {
 }
 
 /**
- * Rebuilds the <select id="stake-symbol"> dropdown with the given
- * list of currency pairs, labelling XAUUSD as "(Gold)".
+ * Rebuilds the custom liquid-glass symbol dropdown (primary UI) and,
+ * when present, the legacy <select id="stake-symbol"> (test fixture /
+ * fallback) with the given list of currency pairs, labelling XAUUSD
+ * as "(Gold)".  The first pair becomes the active selection.
  */
 function populateSymbolDropdown(pairs) {
+  var list = pairs || [];
+
+  // Custom liquid-glass dropdown menu (primary dashboard UI)
+  var menuList = document.getElementById('symbol-menu-list');
+  if (menuList) {
+    menuList.innerHTML = list.map(function(symbol) {
+      var label = symbol === 'XAUUSD' ? '🏆 XAUUSD (Gold)' : symbol;
+      return '<div class="dropdown-item" onclick="selectSymbol(\'' + esc(symbol) + '\')">' + esc(label) + '</div>';
+    }).join('');
+  }
+
+  // Legacy native select (test fixture / fallback)
   var selectElem = document.getElementById('stake-symbol');
-  if (!selectElem) return;
+  if (selectElem) {
+    selectElem.innerHTML = list.map(function(symbol) {
+      var label = symbol === 'XAUUSD' ? symbol + ' (Gold)' : symbol;
+      return '<option value="' + esc(symbol) + '">' + esc(label) + '</option>';
+    }).join('');
+  }
 
-  selectElem.innerHTML = (pairs || []).map(function(symbol) {
-    var label = symbol === 'XAUUSD' ? symbol + ' (Gold)' : symbol;
-    return '<option value="' + esc(symbol) + '">' + esc(label) + '</option>';
-  }).join('');
+  // Activate the first pair (reflects in trigger + preview + gateway check)
+  if (list.length) {
+    selectSymbol(list[0], true);
+  } else {
+    updateLotConversionPreview();
+  }
+}
 
-  // Re-calculate the lot preview with the new symbol
+/* ── Custom Liquid Symbol Dropdown ────────────────────────────────── */
+
+/**
+ * Toggles the custom liquid-glass symbol menu open / closed.
+ * The container also receives the `open` class so the chevron
+ * arrow can rotate via CSS (.custom-liquid-dropdown.open .chevron).
+ */
+function toggleSymbolMenu() {
+  var menuList = document.getElementById('symbol-menu-list');
+  if (menuList) menuList.classList.toggle('open');
+  var dropdown = document.getElementById('symbol-dropdown');
+  if (dropdown) dropdown.classList.toggle('open');
+}
+
+/**
+ * Selects a symbol from the custom dropdown: updates the trigger label,
+ * closes the menu, syncs the legacy select, refreshes the lot preview,
+ * and re-runs the Five Gateway evaluation for the new symbol.
+ *
+ * @param {string} symbol - Chosen pair, e.g. "XAUUSD".
+ * @param {boolean} [skipGateway] - When true, skips the gateway re-check
+ *   (used during dropdown population to avoid a redundant fetch).
+ */
+function selectSymbol(symbol, skipGateway) {
+  selectedSymbol = symbol;
+
+  var textEl = document.getElementById('selected-symbol-text');
+  if (textEl) {
+    textEl.textContent = symbol === 'XAUUSD' ? '🏆 XAUUSD (Gold)' : symbol;
+  }
+
+  var menuList = document.getElementById('symbol-menu-list');
+  if (menuList) menuList.classList.remove('open');
+  var dropdown = document.getElementById('symbol-dropdown');
+  if (dropdown) dropdown.classList.remove('open');
+
+  // Keep the legacy select in sync (test fixture / fallback)
+  var selectElem = document.getElementById('stake-symbol');
+  if (selectElem && selectElem.value !== symbol) selectElem.value = symbol;
+
   updateLotConversionPreview();
+  if (!skipGateway) {
+    // Debounced so rapid dropdown scrolling coalesces to the last
+    // symbol instead of firing the full SMC pipeline per entry.  The
+    // window is the module-level gatewayDebounceMs (default 250 ms).
+    debouncedEvaluateGateways(gatewayDebounceMs);
+    updateTradeSignalPill(symbol);
+    updateQuickStakeSetup(symbol);
+  }
+}
+
+/**
+ * Cancels any pending (debounced) gateway evaluation without running it.
+ * Used for teardown so a timer armed by a previous selection cannot fire
+ * into a later page state.
+ */
+function clearDebouncedGateways() {
+  if (gatewayDebounceTimer) {
+    clearTimeout(gatewayDebounceTimer);
+    gatewayDebounceTimer = null;
+  }
+}
+
+/**
+ * Populates the custom dropdown strictly with the active profile's pair
+ * list (read from localStorage, falling back to the module default).
+ */
+function syncProfilePairsDropdown() {
+  var saved = (typeof localStorage !== 'undefined')
+    ? localStorage.getItem('genesis_active_profile')
+    : null;
+  var key = (saved && TRADING_PROFILES[saved])
+    ? saved
+    : (activeProfile && TRADING_PROFILES[activeProfile] ? activeProfile : 'swing_trader');
+  var pairs = (TRADING_PROFILES[key] && TRADING_PROFILES[key].pairs) || [];
+  populateSymbolDropdown(pairs);
 }
 
 /* ── Profile-Aware Discord Alert Handler ────────────────────────── */
@@ -611,33 +898,101 @@ function sendDiscordTradeNotification(trade) {
 /* ── Five Gateway Evaluator ───────────────────────────────────────── */
 
 /**
+ * Debounced wrapper for the dropdown-driven gateway evaluation.
+ *
+ * Scrolling the custom symbol dropdown fires ``selectSymbol`` once per
+ * entry; without a debounce every entry would immediately trigger the
+ * full SMC/indicator pipeline behind ``GET /api/evaluator``.  This
+ * coalesces rapid selections so only the *last* symbol within
+ * *delayMs* (default 250 ms) actually hits the backend.
+ */
+function debouncedEvaluateGateways(delayMs) {
+  if (gatewayDebounceTimer) {
+    clearTimeout(gatewayDebounceTimer);
+    gatewayDebounceTimer = null;
+  }
+  var delay = (typeof delayMs === 'number' && delayMs >= 0) ? delayMs : gatewayDebounceMs;
+  gatewayDebounceTimer = setTimeout(function() {
+    gatewayDebounceTimer = null;
+    evaluateFiveGateways();
+  }, delay);
+}
+
+/**
+ * Overrides the debounce window (ms) for the dropdown gateway evaluation.
+ * Test hook — a short window keeps unit tests fast; 0 runs immediately.
+ */
+function setGatewayDebounceMs(ms) {
+  gatewayDebounceMs = (typeof ms === 'number' && ms >= 0) ? ms : 250;
+}
+
+/**
+ * Runs any pending debounced gateway evaluation immediately (test /
+ * teardown helper) and clears the timer.
+ */
+function flushDebouncedGateways() {
+  if (!gatewayDebounceTimer) return;
+  clearTimeout(gatewayDebounceTimer);
+  gatewayDebounceTimer = null;
+  evaluateFiveGateways();
+}
+
+/**
  * Queries the MT5 backend (or falls back to local simulation) to
  * evaluate the five trade-entry gates for the currently selected
  * symbol and active profile, then updates the gate pills in the UI.
+ *
+ * Includes a stale-response guard: the requested symbol is captured at
+ * call time and any result whose symbol no longer matches the current
+ * selection is dropped, so an in-flight response for an older symbol
+ * (fired before a rapid re-selection) can never overwrite newer pills.
  */
 async function evaluateFiveGateways() {
   var selectElem = document.getElementById('stake-symbol');
-  var symbol = selectElem ? selectElem.value : '';
+  var symbol = selectElem && selectElem.value ? selectElem.value : selectedSymbol;
   if (!symbol) return;
 
+  _gatewayRequestSymbol = symbol;
   var profile = activeProfile || 'swing_trader';
 
   try {
     var res = await fetch('/api/evaluator?symbol=' + encodeURIComponent(symbol) + '&profile=' + encodeURIComponent(profile));
+    // Backend is reachable but couldn't compute real gates (e.g. MT5
+    // market data unavailable → 503) — fall back to simulation so the
+    // pills always reflect *something* rather than going stale.
+    if (!res.ok) throw new Error('Evaluator unavailable: ' + res.status);
     var gateData = await res.json();
-    // Expected: { gates: [true, true, true, false, true], overall: "4/5 PASSED" }
+    // Expected: { gates: [true, true, true, false, true], overall: "4/5 MODERATE" }
+    if (!_isCurrentGatewaySymbol(symbol)) return; // stale response — drop it
     if (gateData && Array.isArray(gateData.gates)) {
       updateGatewayUI(gateData.gates);
-    } else if (gateData && Array.isArray(gateData.overall)) {
-      updateGatewayUI(gateData.overall);
+    } else {
+      // Malformed payload — don't trust it, use simulation.
+      simulateGatewayCheck(symbol);
     }
   } catch (err) {
     // Fallback simulation mode if API is offline / unreachable
-    simulateGatewayCheck(symbol);
+    if (_isCurrentGatewaySymbol(symbol)) simulateGatewayCheck(symbol);
   }
 
   // Also refresh the lot preview whenever the symbol changes
   updateLotConversionPreview();
+}
+
+/**
+ * Returns true when *symbol* is still the active gateway symbol, i.e.
+ * the response is not stale.  Keeps rapid scrolling from letting an
+ * older in-flight request paint over the current selection's pills.
+ *
+ * The currently selected symbol is re-read from the DOM (and the module
+ * ``selectedSymbol`` fallback) at check time — *not* from the stale
+ * ``_gatewayRequestSymbol`` — because ``evaluateFiveGateways`` resolves
+ * the symbol only after the debounce window has already elapsed.
+ */
+function _isCurrentGatewaySymbol(symbol) {
+  var selectElem = document.getElementById('stake-symbol');
+  var current = selectElem && selectElem.value ? selectElem.value : selectedSymbol;
+  return !symbol || symbol === current;
 }
 
 /**
@@ -646,18 +1001,19 @@ async function evaluateFiveGateways() {
  */
 function updateGatewayUI(gateResults) {
   var gateIds = ['gate-1', 'gate-2', 'gate-3', 'gate-4', 'gate-5'];
+  var headerIds = ['gate-ema', 'gate-adx', 'gate-rsi', 'gate-vol', 'gate-reg'];
   var passedCount = 0;
 
   gateResults.forEach(function(passed, index) {
-    var elem = document.getElementById(gateIds[index]);
-    if (!elem) return;
+    if (passed) passedCount++;
 
-    if (passed) {
-      elem.className = 'gate-pill passed';
-      passedCount++;
-    } else {
-      elem.className = 'gate-pill failed';
-    }
+    // Legacy inline gate pills (bottom-of-card evaluator)
+    var elem = document.getElementById(gateIds[index]);
+    if (elem) elem.className = passed ? 'gate-pill passed' : 'gate-pill failed';
+
+    // Header gateway matrix pills
+    var hElem = document.getElementById(headerIds[index]);
+    if (hElem) hElem.className = passed ? 'hpill passed' : 'hpill failed';
   });
 
   var statusElem = document.getElementById('gateway-overall-status');
@@ -685,6 +1041,398 @@ function simulateGatewayCheck(symbol) {
   updateGatewayUI(gates);
 }
 
+/* ── Smart Assist Mode Toggle ─────────────────────────────────────── */
+
+var isSmartAssistEnabled = true;
+
+/**
+ * Returns the current Smart Assist enabled state.
+ */
+function getSmartAssistState() {
+  return isSmartAssistEnabled;
+}
+
+/**
+ * Toggles Smart Assist mode on or off, updating the setup capsule
+ * pill styling, the label text, and the target values' enabled state.
+ */
+function toggleSmartAssist(isEnabled) {
+  isSmartAssistEnabled = !!isEnabled;
+
+  var pill = document.getElementById('qs-setup-pill');
+  var label = document.getElementById('assist-status-text');
+  var targetsGroup = document.getElementById('qs-targets-group');
+
+  if (isSmartAssistEnabled) {
+    if (pill) pill.classList.remove('manual-mode');
+    if (targetsGroup) targetsGroup.classList.remove('disabled');
+    if (label) {
+      label.textContent = 'SMART ASSIST';
+      label.style.color = '#38bdf8';
+    }
+    console.log('⚡ [GENESIS]: Smart Assist Active. Trade Gateways & Auto SL/TP Enabled.');
+  } else {
+    if (pill) pill.classList.add('manual-mode');
+    if (targetsGroup) targetsGroup.classList.add('disabled');
+    if (label) {
+      label.textContent = 'MANUAL ONLY';
+      label.style.color = '#64748b';
+    }
+    console.log('🖐️ [GENESIS]: Smart Assist Off. Raw Manual Execution Mode Active.');
+  }
+}
+
+/**
+ * Checks whether all five gateway gates currently show a "passed" state.
+ * @returns {boolean} true if all gates passed, false otherwise
+ */
+function checkAllGatesPassed() {
+  var gateIds = ['gate-1', 'gate-2', 'gate-3', 'gate-4', 'gate-5'];
+  return gateIds.every(function(id) {
+    var el = document.getElementById(id);
+    return el && el.classList.contains('passed');
+  });
+}
+
+/**
+ * Returns mock SL/TP target values for a symbol and trade direction.
+ * In production this is replaced with live MT5 ATR-based calculations.
+ */
+function getCalculatedTargets(symbol, side) {
+  var sl, tp;
+  if (symbol === 'XAUUSD') {
+    if (side === 'BUY') { sl = '2410.50'; tp = '2428.00'; }
+    else { sl = '2428.50'; tp = '2410.50'; }
+  } else {
+    if (side === 'BUY') { sl = '1.0835'; tp = '1.0885'; }
+    else { sl = '1.0885'; tp = '1.0835'; }
+  }
+  return { sl: sl, tp: tp };
+}
+
+/**
+ * Dispatches a quick stake order, respecting Smart Assist mode.
+ * When enabled, validates the 5 technical gates before firing and
+ * attaches auto-calculated SL/TP levels. When disabled, executes
+ * a raw order directly to MT5 without gate restrictions.
+ *
+ * @param {string} side - 'BUY' or 'SELL'
+ */
+async function executeQuickStake(side) {
+  var selectElem = document.getElementById('stake-symbol');
+  var symbol = (selectElem && selectElem.value) ? selectElem.value : selectedSymbol;
+  var stakeInput = document.getElementById('stake-amount-usd');
+  var stakeAmount = (stakeInput && stakeInput.value) ? stakeInput.value : '20';
+
+  if (isSmartAssistEnabled) {
+    // 1. Check 5 Gateways (EMA, ADX, RSI, VOL, REG)
+    await evaluateFiveGateways();
+    var passesGates = checkAllGatesPassed();
+    if (!passesGates) {
+      alert('[GENESIS GATE REJECTED]: Volatility or Trend alignment gates failed for ' + symbol + '. Toggle off Smart Assist to override.');
+      return;
+    }
+
+    // 2. Fetch Auto Calculated SL / TP and update the inline pill
+    var targets = getCalculatedTargets(symbol, side);
+    var slElem = document.getElementById('qs-sl');
+    var tpElem = document.getElementById('qs-tp');
+    var pill = document.getElementById('qs-setup-pill');
+    if (slElem) slElem.innerHTML = 'SL: <b>' + targets.sl + '</b>';
+    if (tpElem) tpElem.innerHTML = 'TP: <b>' + targets.tp + '</b>';
+    if (pill) {
+      pill.className = (side === 'BUY')
+        ? 'qs-setup-capsule qs-targets-inline buy-active'
+        : 'qs-setup-capsule qs-targets-inline sell-active';
+    }
+    console.log('🚀 Executing SMART ' + side + ' on ' + symbol + ' with SL: ' + targets.sl + ', TP: ' + targets.tp);
+
+  } else {
+    // Raw execution directly to MT5 without gate restrictions
+    console.log('⚡ Executing RAW MANUAL ' + side + ' on ' + symbol + ' (No auto SL/TP or gate filters applied)');
+    var pill2 = document.getElementById('qs-setup-pill');
+    if (pill2) pill2.classList.remove('buy-active', 'sell-active');
+  }
+
+  // In both modes, call the existing stake trade execution
+  executeStakeTrade(side);
+}
+
+/* ── Header Live Trade Signal Pill ────────────────────────────────── */
+
+/**
+ * Queries the MT5 backend (or falls back to local simulation) for a
+ * live trade recommendation on the given symbol, then renders the
+ * results into the header signal pill.
+ */
+async function updateTradeSignalPill(symbol) {
+  var pill = document.getElementById('trade-signal-pill');
+  if (!pill) return;
+
+  try {
+    var res = await fetch('/api/signal?symbol=' + encodeURIComponent(symbol) + '&profile=' + encodeURIComponent(localStorage.getItem('genesis_active_profile') || activeProfile));
+    // Backend is reachable but couldn't compute a signal (e.g. MT5
+    // market data unavailable → 503) — fall back to the local preview so
+    // the pill always reflects *something* rather than going stale.
+    if (!res.ok) throw new Error('Signal API unavailable: ' + res.status);
+    var data = await res.json();
+    // Expected: { action, type: 'BUY'|'SELL'|'WAIT', sl, tp, duration }
+    if (data && typeof data.type === 'string' && typeof data.action === 'string') {
+      renderSignalData(data);
+    } else {
+      // Malformed payload — don't trust it, use the local preview.
+      calculateLocalSignalPreview(symbol);
+    }
+  } catch (err) {
+    // Fallback calculations for preview/offline mode
+    calculateLocalSignalPreview(symbol);
+  }
+}
+
+/**
+ * Simulates a signal recommendation for UI preview when the backend
+ * API is not reachable. Gold (XAUUSD) gets a simulated BUY signal;
+ * other pairs show NEUTRAL / WAIT.
+ */
+function calculateLocalSignalPreview(symbol) {
+  var profile = localStorage.getItem('genesis_active_profile') || activeProfile || 'swing_trader';
+
+  // Tailor hold duration estimates per profile
+  var holdEstimate = '45m';
+  if (/swing/i.test(profile)) holdEstimate = '1d - 3d';
+  if (/breakout/i.test(profile)) holdEstimate = '2h - 6h';
+  if (/scalper/i.test(profile)) holdEstimate = '15m - 45m';
+
+  // Simulate setup check for Gold vs Forex
+  if (symbol === 'XAUUSD') {
+    renderSignalData({
+      action: 'BUY SIGNAL',
+      type: 'BUY',
+      sl: '2410.50 (-$5.30)',
+      tp: '2428.00 (+$12.20)',
+      duration: holdEstimate
+    });
+  } else {
+    renderSignalData({
+      action: 'NEUTRAL / WAIT',
+      type: 'WAIT',
+      sl: '--',
+      tp: '--',
+      duration: holdEstimate
+    });
+  }
+
+  // Also update the inline Quick Stake pill
+  var qsSl = document.getElementById('qs-sl');
+  var qsTp = document.getElementById('qs-tp');
+  var qsHold = document.getElementById('qs-hold');
+  var qsPill = document.getElementById('qs-setup-pill');
+  if (qsSl && qsTp && qsHold) {
+    if (symbol === 'XAUUSD') {
+      qsSl.innerHTML = 'SL: <b>2410.50 (-$5.30)</b>';
+      qsTp.innerHTML = 'TP: <b>2428.00 (+$12.20)</b>';
+      if (qsPill) qsPill.className = 'qs-setup-capsule buy-active';
+    } else {
+      qsSl.innerHTML = 'SL: <b>--</b>';
+      qsTp.innerHTML = 'TP: <b>--</b>';
+      if (qsPill) qsPill.className = 'qs-setup-capsule';
+    }
+    qsHold.innerHTML = 'Hold: <b>' + holdEstimate + '</b>';
+  }
+}
+
+/**
+ * Renders fetched or simulated signal data into the header pill,
+ * switching the pill colour class (buy/sell/wait) and filling in
+ * SL, TP, and estimated hold-duration.
+ */
+function renderSignalData(data) {
+  var pill = document.getElementById('trade-signal-pill');
+  if (!pill) return;
+
+  if (data.type === 'BUY') {
+    pill.className = 'signal-pill liquid-glass signal-buy';
+  } else if (data.type === 'SELL') {
+    pill.className = 'signal-pill liquid-glass signal-sell';
+  } else {
+    pill.className = 'signal-pill liquid-glass signal-wait';
+  }
+
+  var actionTxt = document.getElementById('sig-action');
+  var slTxt = document.getElementById('sig-sl');
+  var tpTxt = document.getElementById('sig-tp');
+  var durationTxt = document.getElementById('sig-duration');
+
+  if (actionTxt) actionTxt.textContent = data.action;
+  if (slTxt) slTxt.textContent = 'SL: ' + data.sl;
+  if (tpTxt) tpTxt.textContent = 'TP: ' + data.tp;
+  if (durationTxt) durationTxt.textContent = 'Hold: ' + data.duration;
+}
+
+/**
+ * Applies a GATE_UPDATE WebSocket event (pushed by the orchestrator's
+ * background pill-snapshot broadcaster) to the header gateway pills.
+ *
+ * Only the currently selected symbol's snapshot is painted — a background
+ * event for another pair must never overwrite the user's pills.
+ */
+function applyWsGateUpdate(data) {
+  if (!data || !data.symbol) return;
+  // Symbol guard — a background snapshot for another pair must never
+  // overwrite the pills for the currently selected symbol.
+  if (!_isCurrentGatewaySymbol(data.symbol)) return;
+  if (Array.isArray(data.gates) && data.gates.length === 5) {
+    updateGatewayUI(data.gates);
+  }
+}
+
+/**
+ * Applies a SIGNAL_UPDATE WebSocket event to the header trade-signal pill
+ * (same symbol guard as applyWsGateUpdate).
+ */
+function applyWsSignalUpdate(data) {
+  if (!data || !data.symbol) return;
+  if (!_isCurrentGatewaySymbol(data.symbol)) return;
+  if (data && typeof data.type === 'string' && typeof data.action === 'string') {
+    renderSignalData(data);
+  }
+}
+
+/**
+ * Dynamic Setup Evaluator for the Quick Stake inline signal pill.
+ * Queries the MT5 backend (or falls back to local calculation) to
+ * populate SL/TP/Hold values and set the pill's buy/sell/wait state.
+ */
+async function updateQuickStakeSetup(symbol) {
+  if (!symbol) {
+    symbol = selectedSymbol || 'XAUUSD';
+  }
+
+  var slElem = document.getElementById('qs-sl');
+  var tpElem = document.getElementById('qs-tp');
+  var holdElem = document.getElementById('qs-hold');
+  var pill = document.getElementById('qs-setup-pill');
+  if (!slElem || !tpElem || !holdElem) return;
+
+  try {
+    var res = await fetch('/api/signal?symbol=' + encodeURIComponent(symbol) + '&profile=' + encodeURIComponent(activeProfile));
+    var data = await res.json();
+    if (data && data.sl !== undefined) {
+      slElem.innerHTML = 'SL: <b>' + (data.sl || '--') + '</b>';
+      tpElem.innerHTML = 'TP: <b>' + (data.tp || '--') + '</b>';
+      holdElem.innerHTML = 'Hold: <b>' + (data.duration || '--') + '</b>';
+      if (pill) {
+        var cls = 'qs-setup-capsule ';
+        cls += data.type === 'BUY' ? 'buy-active' : data.type === 'SELL' ? 'sell-active' : '';
+        pill.className = cls;
+      }
+    } else {
+      throw new Error('Malformed signal response');
+    }
+  } catch (err) {
+    calculateLocalSignalPreview(symbol);
+  }
+}
+
+/* ── Profile Ticker Bar ──────────────────────────────────────────── */
+
+/**
+ * Formats a live price for the ticker bar. Gold (XAUUSD) reads better at
+ * 2 decimals (2415.80 not 2415.80000), JPY crosses at 3, everything else
+ * at 5 — matching how the main positions table formats each class.
+ */
+function tickerPrice(symbol, price) {
+  const n = Number(price);
+  if (!isFinite(n)) return '--.--';
+  const s = String(symbol || '');
+  if (s === 'XAUUSD') return n.toFixed(2);
+  if (/JPY/.test(s)) return n.toFixed(3);
+  return n.toFixed(5);
+}
+
+/**
+ * Returns the pair list for the active profile (falls back to the
+ * default Swing Trader set when the profile key is unknown).
+ */
+function tickerPairs() {
+  const key = getActiveProfile();
+  const prof = TRADING_PROFILES[key] || TRADING_PROFILES.swing_trader;
+  return (prof && prof.pairs) || [];
+}
+
+/**
+ * Renders the horizontal ticker bar with every pair configured for the
+ * active profile. Each item shows a live-price slot (id ``ticker-price-``
+ * + symbol) that ``applyTickerTick`` patches as WS TICK events arrive.
+ */
+function renderProfileTickerBar() {
+  const container = document.getElementById('dynamic-ticker-container');
+  if (!container) return;
+
+  const pairs = tickerPairs();
+  container.innerHTML = pairs.map((symbol, index) => {
+    const isGold = symbol === 'XAUUSD';
+    const label = isGold ? '🏆 XAUUSD' : symbol;
+    const divider = index < pairs.length - 1 ? '<span class="ticker-divider">|</span>' : '';
+    return `
+      <div class="ticker-item-clean">
+        <strong>${esc(label)}:</strong>
+        <span id="ticker-price-${esc(symbol)}" class="ticker-price flat">--.--</span>
+      </div>${divider}`;
+  }).join('');
+}
+
+/**
+ * Patches a single ticker item with the latest live price from a WS
+ * TICK event (symbol + bid/ask), tinting it green/red based on the
+ * direction of the last price move.
+ */
+function applyTickerTick(tickData) {
+  if (!tickData || !tickData.symbol) return;
+  const price = tickData.bid != null ? tickData.bid : tickData.ask;
+  if (price == null) return;
+
+  const el = document.getElementById('ticker-price-' + tickData.symbol);
+  if (!el) return;
+
+  const prev = _tickerPrices[tickData.symbol];
+  _tickerPrices[tickData.symbol] = Number(price);
+
+  el.textContent = tickerPrice(tickData.symbol, price);
+  const direction = (prev == null) ? 'flat' : (Number(price) > prev ? 'up' : Number(price) < prev ? 'down' : 'flat');
+  el.className = 'ticker-price ' + direction;
+}
+
+/**
+ * Switches the dashboard workspace scope to the given profile: persists
+ * it, refreshes the header badge, and re-renders every profile-dependent
+ * module (ticker bar, symbol dropdown, recent history, quick stake) in
+ * one pass.
+ */
+function onProfileChange(newProfileName) {
+  if (!TRADING_PROFILES[newProfileName]) {
+    console.warn('Unknown profile key: ' + newProfileName);
+    return;
+  }
+
+  activeProfile = newProfileName;
+
+  if (typeof localStorage !== 'undefined') {
+    localStorage.setItem('genesis_active_profile', newProfileName);
+  }
+
+  const badge = document.getElementById('active-profile-badge');
+  if (badge) badge.textContent = 'PROFILE ' + String(newProfileName).toUpperCase();
+
+  renderProfileTickerBar();
+  syncProfilePairsDropdown();
+  renderActivePositions(livePositions);
+  refreshRecentHistory();
+  updateQuickStakeSetup(selectedSymbol || 'XAUUSD');
+
+  console.log('🔄 [GENESIS UI]: Switched workspace scope to profile [' + newProfileName + ']');
+}
+
 /* ── Live Status / Positions ─────────────────────────────────────── */
 
 async function refreshStatus() {
@@ -694,6 +1442,21 @@ async function refreshStatus() {
     if (!status) return;
 
     setEngineState(!status.paused);
+
+    // Sync workspace scope from the backend's active profile so the whole
+    // dashboard re-scopes even after an external profile change. The
+    // backend uses its own key (default/scalper/breakout/daytrader) which
+    // differs from the front-end keys — only adopt it when it maps to a
+    // known front-end profile to avoid clobbering the picker's selection.
+    // onProfileChange re-renders every profile-dependent module (ticker,
+    // dropdown, history, quick stake) and persists the choice, so the
+    // dashboard stays internally consistent.
+    if (status.active_profile) {
+      var mapped = backendProfileKeyToFrontend(status.active_profile);
+      if (mapped && mapped !== activeProfile) {
+        onProfileChange(mapped);
+      }
+    }
 
     const bal = document.getElementById('metric-balance');
     const eq = document.getElementById('metric-equity');
@@ -707,19 +1470,22 @@ async function refreshStatus() {
     }
     if (wr) wr.textContent = (Number(status.win_rate) * 100).toFixed(1) + '%';
 
+    // Same convention as onProfileChange: raw profile key, uppercased.
     const badge = document.getElementById('active-profile-badge');
-    if (badge) badge.textContent = 'PROFILE ' + (status.active_profile || 'default').toUpperCase();
+    if (badge) badge.textContent = 'PROFILE ' + getActiveProfile().toUpperCase();
 
     renderActivePositions(status.open_trades || []);
 
+    // Patch the ticker bar with live prices from the open-trade snapshot
+    // (fallback for symbols whose TICK events aren't yet flowing).
     if (status.open_trades && status.open_trades.length) {
-      const ticker = document.getElementById('live-price-banner-text');
-      if (ticker) {
-        ticker.textContent = status.open_trades
-          .slice(0, 3)
-          .map(p => `${p.symbol}: ${fmtPrice(p.live_price != null ? p.live_price : p.current_price, p.symbol)}`)
-          .join(' | ');
-      }
+      status.open_trades.forEach(p => {
+        const price = p.live_price != null ? p.live_price : p.current_price;
+        if (price != null) {
+          const el = document.getElementById('ticker-price-' + p.symbol);
+          if (el) el.textContent = tickerPrice(p.symbol, price);
+        }
+      });
     }
   } catch (e) {
     // silent — backend may be starting up
@@ -727,7 +1493,9 @@ async function refreshStatus() {
 }
 
 function renderActivePositions(positions) {
-  livePositions = positions || [];
+  // Scope strictly to the active profile's strategies so positions left
+  // behind by another profile never clutter this view.
+  livePositions = (positions || []).filter(p => recordBelongsToProfile(p, getActiveProfile()));
   const tbody = document.getElementById('active-positions-body');
   if (!tbody) return;
 
@@ -779,7 +1547,8 @@ function updatePositionTicks(tickData) {
 async function refreshRecentHistory() {
   if (typeof fetch === 'undefined') return;
   try {
-    const trades = await apiFetch('/api/trades?status=closed&limit=8');
+    // Pull a wider window so the profile filter still leaves rows to show.
+    const trades = await apiFetch('/api/trades?status=closed&limit=100');
     renderRecentHistory(trades || []);
   } catch (e) {
     // silent
@@ -790,12 +1559,16 @@ function renderRecentHistory(trades) {
   const tbody = document.getElementById('recent-history-body');
   if (!tbody) return;
 
-  if (!trades || !trades.length) {
-    tbody.innerHTML = `<tr><td colspan="4" class="py-6 text-center text-zinc-600">No closed trades yet</td></tr>`;
+  // Scope strictly to the active profile's strategies — old trades from
+  // other profiles never pollute the current profile's execution log.
+  const scoped = (trades || []).filter(t => recordBelongsToProfile(t, getActiveProfile()));
+
+  if (!scoped.length) {
+    tbody.innerHTML = `<tr><td colspan="4" class="py-6 text-center text-zinc-600">No closed trades for ${esc(getProfileName())} yet</td></tr>`;
     return;
   }
 
-  tbody.innerHTML = trades.map(t => `
+  tbody.innerHTML = scoped.slice(0, 8).map(t => `
     <tr class="table-row-hover">
       <td class="py-3 text-zinc-500 mono-num">${fmtTime(t.close_time || t.open_time)}</td>
       <td class="py-3 font-bold text-white">${esc(t.symbol)}</td>
@@ -817,28 +1590,34 @@ async function openHistoryModal() {
   if (tbody) tbody.innerHTML = `<tr><td colspan="8" class="py-6 text-center text-zinc-600">Loading…</td></tr>`;
 
   if (typeof fetch === 'undefined') return;
-  const [perf, trades] = await Promise.all([
-    loadPerformance(),
-    apiFetch('/api/trades?status=closed&limit=100').catch(() => []),
-  ]);
+  const trades = await apiFetch('/api/trades?status=closed&limit=100').catch(() => []);
 
-  if (metrics && perf) {
+  // Scope the extended history strictly to the active profile — the modal
+  // mirrors the Recent History card so metrics never blend another
+  // profile's closed trades into this view. Every metric below (including
+  // Max Drawdown and Avg R:R) is computed from this scoped list only; no
+  // global /api/performance account data leaks in.
+  const scopedTrades = (trades || []).filter(t => recordBelongsToProfile(t, getActiveProfile()));
+
+  if (metrics) {
+    const scopedStats = computeScopedStats(scopedTrades);
     metrics.innerHTML = `
-      <div class="hm-item"><span class="hm-label">Total Trades</span><span class="hm-value">${Number(perf.total_trades) || 0}</span></div>
-      <div class="hm-item"><span class="hm-label">Win Rate</span><span class="hm-value">${(Number(perf.win_rate) * 100).toFixed(1)}%</span></div>
-      <div class="hm-item"><span class="hm-label">Total PnL</span><span class="hm-value ${pnlClass(perf.total_pnl)}">${fmtPnl(perf.total_pnl)}</span></div>
-      <div class="hm-item"><span class="hm-label">Profit Factor</span><span class="hm-value">${Number(perf.profit_factor).toFixed(2)}</span></div>
-      <div class="hm-item"><span class="hm-label">Avg Win</span><span class="hm-value positive">${fmtPnl(perf.avg_win)}</span></div>
-      <div class="hm-item"><span class="hm-label">Avg Loss</span><span class="hm-value negative">${fmtPnl(perf.avg_loss)}</span></div>
-      <div class="hm-item"><span class="hm-label">Max Drawdown</span><span class="hm-value negative">${Number(perf.max_drawdown).toFixed(2)}%</span></div>
-      <div class="hm-item"><span class="hm-label">Avg R:R</span><span class="hm-value">${Number(perf.avg_rr).toFixed(2)}</span></div>`;
+      <div class="hm-item"><span class="hm-label">Scope</span><span class="hm-value">${esc(getProfileName())}</span></div>
+      <div class="hm-item"><span class="hm-label">Total Trades</span><span class="hm-value">${scopedStats.total}</span></div>
+      <div class="hm-item"><span class="hm-label">Win Rate</span><span class="hm-value">${scopedStats.winRate}%</span></div>
+      <div class="hm-item"><span class="hm-label">Total PnL</span><span class="hm-value ${pnlClass(scopedStats.totalPnl)}">${fmtPnl(scopedStats.totalPnl)}</span></div>
+      <div class="hm-item"><span class="hm-label">Profit Factor</span><span class="hm-value">${scopedStats.profitFactor}</span></div>
+      <div class="hm-item"><span class="hm-label">Avg Win</span><span class="hm-value positive">${fmtPnl(scopedStats.avgWin)}</span></div>
+      <div class="hm-item"><span class="hm-label">Avg Loss</span><span class="hm-value negative">${fmtPnl(scopedStats.avgLoss)}</span></div>
+      <div class="hm-item"><span class="hm-label">Max Drawdown</span><span class="hm-value negative">${scopedStats.maxDrawdown.toFixed(2)}%</span></div>
+      <div class="hm-item"><span class="hm-label">Avg R:R</span><span class="hm-value">${scopedStats.avgRr.toFixed(2)}</span></div>`;
   }
 
   if (tbody) {
-    if (!trades || !trades.length) {
-      tbody.innerHTML = `<tr><td colspan="8" class="py-6 text-center text-zinc-600">No historical trades</td></tr>`;
+    if (!scopedTrades.length) {
+      tbody.innerHTML = `<tr><td colspan="8" class="py-6 text-center text-zinc-600">No historical trades for ${esc(getProfileName())}</td></tr>`;
     } else {
-      tbody.innerHTML = trades.map(t => `
+      tbody.innerHTML = scopedTrades.map(t => `
         <tr class="table-row-hover">
           <td class="py-3 text-zinc-500 mono-num">${fmtTime(t.close_time || t.open_time)}</td>
           <td class="py-3 font-bold text-white">${esc(t.symbol)}</td>
@@ -1127,6 +1906,11 @@ function connectWebSocket() {
 
     if (msg.event_type === 'TICK') {
       updatePositionTicks(msg.data || {});
+      applyTickerTick(msg.data || {});
+    } else if (msg.event_type === 'GATE_UPDATE') {
+      applyWsGateUpdate(msg.data || {});
+    } else if (msg.event_type === 'SIGNAL_UPDATE') {
+      applyWsSignalUpdate(msg.data || {});
     } else if (
       msg.event_type === 'TRADE_OPEN' ||
       msg.event_type === 'TRADE_CLOSE' ||
@@ -1175,9 +1959,19 @@ if (typeof document !== 'undefined') {
         activeProfile = saved;
       }
     }
-    // Populate the symbol dropdown for the active profile
-    if (TRADING_PROFILES[activeProfile]) {
-      populateSymbolDropdown(TRADING_PROFILES[activeProfile].pairs);
+    // Populate the custom symbol dropdown for the active profile
+    syncProfilePairsDropdown();
+    // Render the profile-aware ticker bar (prices patched live via WS ticks)
+    renderProfileTickerBar();
+
+    // Hook native select onchange (fallback / test fixture)
+    if (typeof document !== 'undefined') {
+      var nativeSelect = document.getElementById('stake-symbol');
+      if (nativeSelect) {
+        nativeSelect.addEventListener('change', function(e) {
+          updateQuickStakeSetup(e.target.value);
+        });
+      }
     }
 
     updateLotConversionPreview();
@@ -1185,6 +1979,8 @@ if (typeof document !== 'undefined') {
     startLiveUpdates();
     checkDiscordConnection();
     evaluateFiveGateways();
+    updateTradeSignalPill(selectedSymbol || 'XAUUSD');
+    updateQuickStakeSetup(selectedSymbol || 'XAUUSD');
   });
 }
 
@@ -1210,10 +2006,28 @@ if (typeof module !== 'undefined' && module.exports) {
     TRADING_PROFILES,
     selectProfile,
     populateSymbolDropdown,
+    toggleSymbolMenu,
+    selectSymbol,
+    syncProfilePairsDropdown,
     sendDiscordTradeNotification,
     evaluateFiveGateways,
+    debouncedEvaluateGateways,
+    flushDebouncedGateways,
+    clearDebouncedGateways,
+    setGatewayDebounceMs,
     updateGatewayUI,
     simulateGatewayCheck,
+    updateTradeSignalPill,
+    calculateLocalSignalPreview,
+    renderSignalData,
+    applyWsGateUpdate,
+    applyWsSignalUpdate,
+    updateQuickStakeSetup,
+    toggleSmartAssist,
+    getSmartAssistState,
+    checkAllGatesPassed,
+    getCalculatedTargets,
+    executeQuickStake,
     initCharts,
     openHistoryModal,
     closeHistoryModal,
@@ -1224,6 +2038,14 @@ if (typeof module !== 'undefined' && module.exports) {
     refreshStatus,
     renderActivePositions,
     renderRecentHistory,
+    getActiveProfile,
+    getProfileName,
+    backendProfileKeyToFrontend,
+    recordBelongsToProfile,
+    computeScopedStats,
+    renderProfileTickerBar,
+    applyTickerTick,
+    onProfileChange,
     fmtMoney,
     fmtPnl,
     startPositionChart,
