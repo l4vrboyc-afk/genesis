@@ -5,16 +5,23 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Genesis Trading Dashboard</title>
     
-    <!-- Google Fonts -->
+    <!-- Google Fonts → preconnect for fast DNS + TLS handshake -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     
-    <!-- FontAwesome for Icons -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- FontAwesome for Icons → early fetch via preload -->
+    <link rel="preconnect" href="https://cdnjs.cloudflare.com">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" media="print" onload="this.media='all'">
+    <noscript><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"></noscript>
     
-    <!-- Chart.js CDN -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Chart.js → deferred, loads after first paint so the dashboard
+         shell renders instantly even on cold caches. -->
+    <link rel="preconnect" href="https://cdn.jsdelivr.net">
+    <script defer src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <!-- Favicon → served by FastAPI from the frontend static directory -->
+    <link rel="icon" type="image/x-icon" href="/favicon.ico">
 
     <style>
         :root {
@@ -258,6 +265,12 @@
             box-shadow: var(--glow-red);
         }
 
+        .status-stale .status-dot {
+            background-color: var(--accent-orange);
+            box-shadow: 0 0 8px rgba(255, 145, 0, 0.4);
+            animation: ws-pulse 1.2s ease-in-out infinite;
+        }
+
         /* ── Main Dashboard Container ───────────────────────────────── */
         main {
             flex: 1;
@@ -334,6 +347,35 @@
             font-weight: 700;
             margin-top: 0.5rem;
             letter-spacing: -0.02em;
+        }
+
+        /* ── Skeleton Loading Shimmer ──────────────────────────────── */
+        .stat-value.is-skeleton {
+            color: transparent !important;
+            position: relative;
+            overflow: hidden;
+            border-radius: 6px;
+            width: 70%;
+            height: 1.75rem;
+            background: rgba(255, 255, 255, 0.04);
+            animation: none;
+        }
+        .stat-value.is-skeleton::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(
+                90deg,
+                transparent 0%,
+                rgba(255, 255, 255, 0.12) 50%,
+                transparent 100%
+            );
+            background-size: 200% 100%;
+            animation: skeleton-shimmer 1.6s ease-in-out infinite;
+        }
+        @keyframes skeleton-shimmer {
+            0% { background-position: -200% 0; }
+            100% { background-position: 200% 0; }
         }
 
         .stat-desc {
@@ -553,6 +595,326 @@
             border-color: var(--accent-cyan);
         }
 
+        /* ── WebSocket Connection Badge ─────────────────────────────── */
+        .ws-badge {
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+            padding: 0.35rem 0.75rem;
+            border-radius: 9999px;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid var(--panel-border);
+            font-size: 0.75rem;
+            font-weight: 500;
+            transition: border-color 0.3s ease;
+        }
+        .ws-badge .ws-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            transition: background-color 0.3s ease, box-shadow 0.3s ease;
+        }
+        .ws-badge.ws-connected .ws-dot {
+            background-color: var(--accent-green);
+            box-shadow: var(--glow-green);
+        }
+        .ws-badge.ws-connecting .ws-dot {
+            background-color: var(--accent-orange);
+            box-shadow: 0 0 8px rgba(255, 145, 0, 0.3);
+            animation: ws-pulse 1.2s ease-in-out infinite;
+        }
+        .ws-badge.ws-disconnected .ws-dot {
+            background-color: var(--accent-red);
+            box-shadow: var(--glow-red);
+        }
+        @keyframes ws-pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.4; }
+        }
+        .ws-badge .ws-label {
+            color: var(--text-secondary);
+        }
+
+        /* ── Live Price Ticker Strip ───────────────────────────────── */
+        .ticker-strip {
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
+            padding: 0.45rem 1.5rem;
+            background: rgba(8, 10, 18, 0.6);
+            border-bottom: 1px solid var(--panel-border);
+            overflow-x: auto;
+            overflow-y: hidden;
+            white-space: nowrap;
+            scrollbar-width: none;
+            -ms-overflow-style: none;
+            min-height: 32px;
+        }
+        .ticker-strip::-webkit-scrollbar { display: none; }
+        .ticker-strip .ticker-sep {
+            color: rgba(255,255,255,0.08);
+            font-size: 0.9rem;
+            margin: 0 0.25rem;
+            user-select: none;
+        }
+        .ticker-item {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+            padding: 0.2rem 0.55rem;
+            border-radius: 6px;
+            font-size: 0.78rem;
+            font-weight: 500;
+            font-variant-numeric: tabular-nums;
+            transition: background 0.15s ease;
+            cursor: default;
+        }
+        .ticker-item:hover {
+            background: rgba(255,255,255,0.04);
+        }
+        .ticker-item .ticker-sym {
+            font-weight: 700;
+            color: var(--text-primary);
+            min-width: 48px;
+        }
+        .ticker-item .ticker-bid {
+            color: var(--accent-red);
+            font-weight: 600;
+            min-width: 60px;
+            text-align: right;
+        }
+        .ticker-item .ticker-ask {
+            color: var(--accent-green);
+            font-weight: 600;
+            min-width: 60px;
+            text-align: right;
+        }
+        .ticker-item .ticker-spread {
+            font-size: 0.7rem;
+            font-weight: 600;
+            padding: 0.1rem 0.35rem;
+            border-radius: 4px;
+            min-width: 36px;
+            text-align: center;
+        }
+        .ticker-spread.tight { color: var(--accent-green); background: rgba(0,230,118,0.08); }
+        .ticker-spread.medium { color: var(--accent-orange); background: rgba(255,145,0,0.08); }
+        .ticker-spread.wide { color: var(--accent-red); background: rgba(255,23,68,0.08); }
+
+        .ticker-price-change {
+            font-size: 0.7rem;
+            font-weight: 700;
+            min-width: 36px;
+            text-align: center;
+            transition: color 0.2s ease;
+        }
+        .ticker-price-change.up {
+            color: var(--accent-green);
+            animation: ticker-flash-green 0.4s ease-out;
+        }
+        .ticker-price-change.down {
+            color: var(--accent-red);
+            animation: ticker-flash-red 0.4s ease-out;
+        }
+        .ticker-price-change.flat {
+            color: var(--text-secondary);
+        }
+        @keyframes ticker-flash-green {
+            0% { text-shadow: 0 0 8px rgba(0,230,118,0.8); }
+            100% { text-shadow: none; }
+        }
+        @keyframes ticker-flash-red {
+            0% { text-shadow: 0 0 8px rgba(255,23,68,0.8); }
+            100% { text-shadow: none; }
+        }
+
+        /* ── Active Profile Badge ───────────────────────────────────── */
+        .profile-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+            padding: 0.15rem 0.6rem;
+            border-radius: 6px;
+            font-weight: 700;
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            transition: all 0.3s ease;
+        }
+        .profile-badge.profile-default {
+            color: var(--accent-cyan);
+            background: rgba(0,242,254,0.1);
+        }
+        .profile-badge.profile-scalper {
+            color: var(--accent-orange);
+            background: rgba(255,145,0,0.1);
+        }
+        .profile-badge.profile-breakout {
+            color: var(--accent-purple);
+            background: rgba(177,85,255,0.1);
+        }
+        .profile-badge.profile-daytrader {
+            color: var(--accent-green);
+            background: rgba(0,230,118,0.1);
+        }
+
+        /* Profile flash animation */
+        @keyframes profile-flash-cyan {
+            0% { box-shadow: 0 0 12px rgba(0,242,254,0.6); background: rgba(0,242,254,0.2); }
+            100% { box-shadow: none; }
+        }
+        @keyframes profile-flash-orange {
+            0% { box-shadow: 0 0 12px rgba(255,145,0,0.6); background: rgba(255,145,0,0.2); }
+            100% { box-shadow: none; }
+        }
+        @keyframes profile-flash-purple {
+            0% { box-shadow: 0 0 12px rgba(177,85,255,0.6); background: rgba(177,85,255,0.2); }
+            100% { box-shadow: none; }
+        }
+        @keyframes profile-flash-green {
+            0% { box-shadow: 0 0 12px rgba(0,230,118,0.6); background: rgba(0,230,118,0.2); }
+            100% { box-shadow: none; }
+        }
+        .profile-badge.flash-cyan {
+            animation: profile-flash-cyan 0.5s ease-out;
+        }
+        .profile-badge.flash-orange {
+            animation: profile-flash-orange 0.5s ease-out;
+        }
+        .profile-badge.flash-purple {
+            animation: profile-flash-purple 0.5s ease-out;
+        }
+        .profile-badge.flash-green {
+            animation: profile-flash-green 0.5s ease-out;
+        }
+
+        /* ── Market Regime Display ──────────────────────────────────── */
+        .regime-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+            padding: 0.15rem 0.6rem;
+            border-radius: 6px;
+            font-weight: 700;
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            transition: all 0.3s ease;
+        }
+        .regime-badge.regime-trending {
+            color: var(--accent-green);
+            background: rgba(0,230,118,0.1);
+        }
+        .regime-badge.regime-ranging {
+            color: var(--accent-orange);
+            background: rgba(255,145,0,0.1);
+        }
+        .regime-badge.regime-volatile {
+            color: var(--accent-red);
+            background: rgba(255,23,68,0.1);
+        }
+        .regime-badge.regime-dead {
+            color: var(--text-secondary);
+            background: rgba(156,163,175,0.08);
+        }
+        .regime-badge.regime-news {
+            color: var(--accent-cyan);
+            background: rgba(0,242,254,0.1);
+        }
+        .regime-badge.regime-bullish {
+            color: var(--accent-green);
+            background: rgba(0,230,118,0.1);
+        }
+        .regime-badge.regime-bearish {
+            color: var(--accent-red);
+            background: rgba(255,23,68,0.1);
+        }
+
+        /* Regime flash animation — same style as ticker flash */
+        @keyframes regime-flash-green {
+            0% { box-shadow: 0 0 12px rgba(0,230,118,0.6); background: rgba(0,230,118,0.2); }
+            100% { box-shadow: none; }
+        }
+        @keyframes regime-flash-orange {
+            0% { box-shadow: 0 0 12px rgba(255,145,0,0.6); background: rgba(255,145,0,0.2); }
+            100% { box-shadow: none; }
+        }
+        @keyframes regime-flash-red {
+            0% { box-shadow: 0 0 12px rgba(255,23,68,0.6); background: rgba(255,23,68,0.2); }
+            100% { box-shadow: none; }
+        }
+        @keyframes regime-flash-cyan {
+            0% { box-shadow: 0 0 12px rgba(0,242,254,0.6); background: rgba(0,242,254,0.2); }
+            100% { box-shadow: none; }
+        }
+        .regime-badge.flash-green {
+            animation: regime-flash-green 0.5s ease-out;
+        }
+        .regime-badge.flash-orange {
+            animation: regime-flash-orange 0.5s ease-out;
+        }
+        .regime-badge.flash-red {
+            animation: regime-flash-red 0.5s ease-out;
+        }
+        .regime-badge.flash-cyan {
+            animation: regime-flash-cyan 0.5s ease-out;
+        }
+
+        /* ── Real-Time Event Toast ──────────────────────────────────── */
+        .toast-container {
+            position: fixed;
+            bottom: 1.5rem;
+            right: 1.5rem;
+            z-index: 9999;
+            display: flex;
+            flex-direction: column-reverse;
+            gap: 0.5rem;
+            pointer-events: none;
+        }
+        .toast {
+            padding: 0.75rem 1rem;
+            border-radius: 8px;
+            background: var(--panel-bg);
+            border: 1px solid var(--panel-border);
+            backdrop-filter: blur(12px);
+            font-size: 0.8rem;
+            line-height: 1.4;
+            color: var(--text-primary);
+            box-shadow: 0 8px 20px rgba(0,0,0,0.4);
+            animation: toast-in 0.3s ease-out;
+            max-width: 340px;
+            pointer-events: auto;
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+        }
+        .toast.toast-win { border-left: 3px solid var(--accent-green); }
+        .toast.toast-loss { border-left: 3px solid var(--accent-red); }
+        .toast.toast-info { border-left: 3px solid var(--accent-cyan); }
+        .toast.toast-warn { border-left: 3px solid var(--accent-orange); }
+        .toast.toast-out {
+            animation: toast-out 0.3s ease-in forwards;
+        }
+        @keyframes toast-in {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+        @keyframes toast-out {
+            from { transform: translateX(0); opacity: 1; }
+            to { transform: translateX(100%); opacity: 0; }
+        }
+        .toast i { font-size: 1rem; }
+        .toast .toast-close {
+            margin-left: auto;
+            cursor: pointer;
+            opacity: 0.5;
+            transition: opacity 0.2s;
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            font-size: 1rem;
+            padding: 0 0.25rem;
+        }
+        .toast .toast-close:hover { opacity: 1; }
+
         .footer {
             text-align: center;
             padding: 1.5rem;
@@ -586,8 +948,21 @@
                 <span class="status-dot"></span>
                 <span id="status-label">LOADING</span>
             </div>
+            <div id="ws-badge" class="ws-badge ws-disconnected" title="WebSocket connection status">
+                <span class="ws-dot"></span>
+                <span class="ws-label" id="ws-label">WS</span>
+            </div>
         </div>
     </header>
+
+    <!-- Live Price Ticker Strip → populated by TICK WebSocket events -->
+    <div id="ticker-strip" class="ticker-strip">
+        <span style="color: var(--text-secondary); font-size: 0.75rem; font-weight: 500; margin-right: 0.35rem;">
+            <i class="fa-solid fa-bolt" style="color: var(--accent-cyan); font-size: 0.65rem;"></i> LIVE
+        </span>
+        <span class="ticker-sep">|</span>
+        <span id="ticker-empty" style="color: var(--text-secondary); font-size: 0.78rem;">Waiting for price data...</span>
+    </div>
 
     <main>
         <!-- Left Column: Stats, Charts, Tables -->
@@ -601,7 +976,7 @@
                         <span>Balance</span>
                         <i class="fa-solid fa-wallet stat-icon" style="color: var(--accent-cyan)"></i>
                     </div>
-                    <div id="balance-val" class="stat-value">$0.00</div>
+                    <div id="balance-val" class="stat-value is-skeleton">$0.00</div>
                     <div class="stat-desc">
                         <span>Account balance</span>
                     </div>
@@ -613,7 +988,7 @@
                         <span>Equity</span>
                         <i class="fa-solid fa-chart-line stat-icon" style="color: var(--accent-purple)"></i>
                     </div>
-                    <div id="equity-val" class="stat-value">$0.00</div>
+                    <div id="equity-val" class="stat-value is-skeleton">$0.00</div>
                     <div class="stat-desc">
                         <span>Net asset valuation</span>
                     </div>
@@ -625,7 +1000,7 @@
                         <span>Daily P&L</span>
                         <i class="fa-solid fa-money-bill-trend-up stat-icon" id="pnl-icon"></i>
                     </div>
-                    <div id="pnl-val" class="stat-value">$0.00</div>
+                    <div id="pnl-val" class="stat-value is-skeleton">$0.00</div>
                     <div class="stat-desc" id="pnl-desc">
                         <span>Today's net result</span>
                     </div>
@@ -637,7 +1012,7 @@
                         <span>Win Rate</span>
                         <i class="fa-solid fa-trophy stat-icon" style="color: var(--accent-orange)"></i>
                     </div>
-                    <div id="winrate-val" class="stat-value">0%</div>
+                    <div id="winrate-val" class="stat-value is-skeleton">0%</div>
                     <div class="stat-desc">
                         <span>Rolling 20-trade window</span>
                     </div>
@@ -649,7 +1024,7 @@
                 <div class="card-title-bar">
                     <h2 class="card-title">
                         <i class="fa-solid fa-chart-area" style="color: var(--accent-cyan)"></i>
-                        Cumulative Profit Over Time
+                        Cumulative Profit Over Time <span style="font-size:0.65rem; color:var(--text-secondary); font-weight:400;">(UTC)</span>
                     </h2>
                 </div>
                 <div class="chart-container">
@@ -696,7 +1071,7 @@
                     <table>
                         <thead>
                             <tr>
-                                <th>Time</th>
+                                <th>Time <span style="font-size:0.65rem; color:var(--text-secondary); font-weight:400;">UTC</span></th>
                                 <th>Ticket</th>
                                 <th>Symbol</th>
                                 <th>Type</th>
@@ -749,7 +1124,17 @@
                 <div style="font-size: 0.85rem; display: flex; flex-direction: column; gap: 0.5rem">
                     <div style="display: flex; justify-content: space-between">
                         <span style="color: var(--text-secondary)">Market Regime:</span>
-                        <span id="regime-val" style="font-weight: 600; text-transform: uppercase;">Unknown</span>
+                        <span id="regime-badge" class="regime-badge regime-dead">
+                            <span id="regime-icon">🪦</span>
+                            <span id="regime-val">Unknown</span>
+                        </span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between">
+                        <span style="color: var(--text-secondary)">Active Profile:</span>
+                        <span id="profile-badge" class="profile-badge profile-default">
+                            <span id="profile-icon"><i class="fa-solid fa-sliders"></i></span>
+                            <span id="profile-val">Default</span>
+                        </span>
                     </div>
                     <div style="display: flex; justify-content: space-between">
                         <span style="color: var(--text-secondary)">Max Drawdown hit:</span>
@@ -806,11 +1191,64 @@
                 </form>
             </div>
 
+            <!-- Manual Trade Entry Card (Fix #13) -->
+            <div class="card">
+                <h2 class="card-title" style="margin-bottom: 1rem">
+                    <i class="fa-solid fa-pen" style="color: var(--accent-orange)"></i>
+                    Manual Trade
+                </h2>
+                <form id="manual-trade-form" onsubmit="manualOpenTrade(event)">
+                    <div class="form-group">
+                        <label>Symbol</label>
+                        <input type="text" id="mt-symbol" class="form-input" placeholder="EURUSD" value="EURUSD" style="text-transform: uppercase;">
+                    </div>
+                    <div class="form-group">
+                        <label>Direction</label>
+                        <select id="mt-direction" class="form-input">
+                            <option value="buy">BUY</option>
+                            <option value="sell">SELL</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Volume (Lots)</label>
+                        <input type="number" id="mt-volume" class="form-input" step="0.01" min="0.01" value="0.10">
+                    </div>
+                    <div class="form-group" style="display: flex; gap: 0.5rem;">
+                        <div style="flex: 1;">
+                            <label>Stop Loss</label>
+                            <input type="number" id="mt-sl" class="form-input" step="0.00001" placeholder="1.0900">
+                        </div>
+                        <div style="flex: 1;">
+                            <label>Take Profit</label>
+                            <input type="number" id="mt-tp" class="form-input" step="0.00001" placeholder="1.1200">
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-cyan" style="margin-top: 0.25rem">
+                        <i class="fa-solid fa-arrow-right"></i> Open Trade
+                    </button>
+                </form>
+                <div id="mt-result" style="display:none; margin-top: 0.5rem; padding: 0.5rem; border-radius: 6px; font-size: 0.8rem;"></div>
+            </div>
+
+            <!-- Log Viewer Button Card -->
+            <div class="card">
+                <h2 class="card-title" style="margin-bottom: 1rem">
+                    <i class="fa-solid fa-terminal" style="color: var(--accent-green)"></i>
+                    Bot Logs
+                </h2>
+                <div style="font-size: 0.82rem; color: var(--text-secondary); margin-bottom: 0.75rem;">
+                    View the bot's log file in-browser for debugging.
+                </div>
+                <button id="open-log-viewer-btn" class="btn btn-outline" onclick="openLogViewer()" type="button">
+                    <i class="fa-solid fa-file-lines"></i> View Logs
+                </button>
+            </div>
+
             <!-- News Filter Card -->
             <div class="card" style="margin-bottom: 1.5rem;">
                 <h2 class="card-title" style="margin-bottom: 1rem">
                     <i class="fa-solid fa-newspaper" style="color: var(--accent-cyan)"></i>
-                    Economic Calendar
+                    Economic Calendar <span style="font-size:0.65rem; color:var(--text-secondary); font-weight:400;">(UTC)</span>
                 </h2>
                 <div id="news-list">
                     <div style="text-align: center; color: var(--text-secondary); font-size: 0.8rem">No upcoming high impact news</div>
@@ -835,6 +1273,9 @@
                 <div id="copilot-loading" style="display:none; color: var(--text-secondary); margin-top: 0.5rem; font-size: 0.85rem;">
                     <i class="fa-solid fa-spinner fa-spin"></i> Thinking...
                 </div>
+                <div id="copilot-cooldown" style="display:none; color: var(--accent-orange); margin-top: 0.5rem; font-size: 0.82rem;">
+                    <i class="fa-solid fa-clock"></i> Cooldown: <span id="copilot-cooldown-count">0</span>s remaining
+                </div>
                 <div id="copilot-transcript" style="margin-top: 0.75rem; max-height: 420px; overflow-y: auto; display: flex; flex-direction: column; gap: 0.5rem;"></div>
             </div>
             <style id="copilot-styles">
@@ -852,8 +1293,10 @@
 
     </main>
 
+    <div id="toast-container" class="toast-container"></div>
+
     <footer class="footer">
-        GENESIS Trading Bot &copy; 2026. Made with vanilla HTML5 / CSS3 / ES6.
+        GENESIS Trading Bot &copy; 2026. All times in UTC. Made with vanilla HTML5 / CSS3 / ES6.
     </footer>
 
     <!-- Active Trade Modal -->
@@ -896,6 +1339,37 @@
                 <div style="margin-top: 1rem;">
                     <button id="btn-close-active-trade" class="btn btn-red" style="width: 100%;"><i class="fa-solid fa-xmark"></i> Close Trade Now</button>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Log Viewer Modal (Fix #14) -->
+    <div id="log-viewer-modal" class="modal">
+        <div class="modal-content" style="max-width: 900px; max-height: 85vh; display: flex; flex-direction: column;">
+            <div class="modal-header">
+                <div class="modal-title"><i class="fa-solid fa-file-lines"></i> Bot Logs</div>
+                <button class="modal-close" onclick="closeLogViewer()">&times;</button>
+            </div>
+            <div style="display: flex; gap: 0.5rem; margin-bottom: 0.75rem; flex-wrap: wrap;">
+                <select id="log-level-filter" class="form-input" style="width: auto; min-width: 120px;">
+                    <option value="">All Levels</option>
+                    <option value="DEBUG">DEBUG</option>
+                    <option value="INFO">INFO</option>
+                    <option value="WARNING">WARNING</option>
+                    <option value="ERROR">ERROR</option>
+                    <option value="CRITICAL">CRITICAL</option>
+                </select>
+                <input type="text" id="log-module-filter" class="form-input" style="width: auto; min-width: 160px;" placeholder="Filter module...">
+                <button class="btn btn-cyan" style="width: auto; padding: 0.5rem 1rem;" onclick="loadLogLines()">
+                    <i class="fa-solid fa-rotate"></i> Refresh
+                </button>
+                <button class="btn btn-outline" style="width: auto; padding: 0.5rem 1rem;" onclick="document.getElementById('log-level-filter').value=''; document.getElementById('log-module-filter').value=''; loadLogLines();">
+                    <i class="fa-solid fa-times"></i> Clear Filters
+                </button>
+            </div>
+            <div id="log-viewer-info" style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.5rem;"></div>
+            <div id="log-viewer-content" style="flex: 1; overflow-y: auto; background: rgba(0,0,0,0.3); border-radius: 6px; padding: 0.75rem; font-family: 'Courier New', monospace; font-size: 0.75rem; line-height: 1.5; white-space: pre-wrap; word-break: break-all; min-height: 300px;">
+                Loading...
             </div>
         </div>
     </div>
@@ -1088,8 +1562,20 @@
             });
         }
 
-        // Fetch dashboard data
+        // ── Fetch retry state ──────────────────────────────────────────
+        // Track consecutive API failures so the UI doesn't show $0.00 / LOADING
+        // forever — after MAX_FETCH_RETRIES failed attempts the status badge
+        // switches to ERROR and the user knows something is wrong.
+        let _fetchAttempts = 0;
+        let _initialDataLoaded = false;
+        let _fetchInFlight = false;
+        const MAX_FETCH_RETRIES = 20;
+
         async function fetchDashboardData() {
+            // Guard: prevent overlapping requests when the 250ms polling
+            // interval fires while a previous fetch is still pending.
+            if (_fetchInFlight) return;
+            _fetchInFlight = true;
             try {
                 // Status & positions
                 const statusRes = await fetch('/api/status');
@@ -1116,12 +1602,58 @@
                 const risk = await riskRes.json();
                 updateRiskUI(risk);
 
+                // ── Success: reset retry state ────────────────────────
+                _fetchAttempts = 0;
+                _initialDataLoaded = true;
+                // Clear stale-data indicator if it was set
+                document.getElementById('bot-status').classList.remove('status-stale');
+
             } catch (err) {
-                console.error("Failed to fetch dashboard api: ", err);
+                _fetchAttempts++;
+                // Show a toast only on the first failure AFTER initial
+                // data was successfully loaded — startup retries should
+                // be silent (the RETRY # badge already provides feedback).
+                if (_fetchAttempts === 1 && _initialDataLoaded) {
+                    showToast('Dashboard connection lost — retrying...', 'warn', 'fa-triangle-exclamation', 5000);
+                }
+                console.error(`Failed to fetch dashboard api (attempt ${_fetchAttempts}/${MAX_FETCH_RETRIES}): `, err);
+
+                // Show retry progress in the status badge so the user
+                // doesn't see "LOADING" forever — after MAX_RETRIES
+                // consecutive failures, switch to "ERROR".
+                // For post-initial-load failures, mark the badge as stale
+                // so stale data doesn't look live.
+                const label = document.getElementById('status-label');
+                const badge = document.getElementById('bot-status');
+                if (!_initialDataLoaded) {
+                    if (_fetchAttempts >= MAX_FETCH_RETRIES) {
+                        label.innerText = 'ERROR';
+                    } else {
+                        label.innerText = `RETRY ${_fetchAttempts}`;
+                    }
+                } else {
+                    // Data was loaded before but feed is now down — mark stale
+                    badge.classList.add('status-stale');
+                    label.innerText = label.innerText === 'ERROR' ? 'ERROR' : 'STALE';
+                }
+            } finally {
+                _fetchInFlight = false;
+            }
+        }
+
+        function _removeSkeletons() {
+            // Remove the shimmer skeleton class from stat values once real
+            // data arrives.  Gated behind _initialDataLoaded so we don't
+            // churn classList.remove on every 250ms poll tick.
+            if (_initialDataLoaded) return;
+            for (const id of ['balance-val', 'equity-val', 'pnl-val', 'winrate-val']) {
+                document.getElementById(id)?.classList.remove('is-skeleton');
             }
         }
 
         function updateStatusUI(data) {
+            _removeSkeletons();
+
             // Header badge status
             const badge = document.getElementById('bot-status');
             const label = document.getElementById('status-label');
@@ -1151,6 +1683,17 @@
             } else {
                 pnlVal.className = "stat-value color-loss";
                 document.getElementById('pnl-icon').style.color = "var(--accent-red)";
+            }
+
+            // Update regime display from status API (has the regime field).
+            // Pass flash=false so REST polling doesn't trigger the animation
+            // every refresh cycle — only WS REGIME_CHANGE events flash.
+            if (data.regime) {
+                updateRegimeDisplay(data.regime, false);
+            }
+            // Update profile display from status API (has active_profile).
+            if (data.active_profile) {
+                updateProfileDisplay(data.active_profile, false);
             }
 
             // Update Active Positions table
@@ -1206,7 +1749,11 @@
                 body.innerHTML = '<tr><td colspan="9" style="text-align: center; color: var(--text-secondary)">No completed trades</td></tr>';
             } else {
                 body.innerHTML = trades.map(t => {
-                    const time = new Date(t.open_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                    function toUtcTime(isoStr) {
+                        if (!isoStr) return '—';
+                        try { const d = new Date(isoStr); return d.toUTCString().slice(17, 22); } catch(e) { return '—'; }
+                    }
+                    const time = toUtcTime(t.open_time);
                     const strData = encodeURIComponent(JSON.stringify(t));
                     return `
                         <tr class="clickable-row" onclick="openHistoryTradeModal('${strData}')">
@@ -1235,11 +1782,17 @@
             }
 
             container.innerHTML = events.map(e => {
-                const time = new Date(e.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                function toUtcTime(isoStr) {
+                    try { const d = new Date(isoStr); return d.toUTCString().slice(17, 22); } catch(e) { return isoStr ? isoStr.slice(11, 16) : '—'; }
+                }
+                const time = toUtcTime(e.time);
+                // Fallback chain: backend may send 'name', 'title', or 'event_name' (Fix #2)
+                const eventLabel = e.name || e.title || e.event_name || 'News Event';
+                const currency = e.currency || e.impact_currency || '—';
                 return `
                     <div class="news-item news-impact-high">
                         <div>
-                            <strong style="color: var(--accent-cyan); font-size: 0.85rem">${e.currency}</strong> - ${e.name}
+                            <strong style="color: var(--accent-cyan); font-size: 0.85rem">${currency}</strong> - ${eventLabel}
                         </div>
                         <div style="font-weight: 500">${time}</div>
                     </div>
@@ -1247,8 +1800,134 @@
             }).join('');
         }
 
+        // ── Regime Display Helper ──────────────────────────────────────
+        // Maps regime names to FontAwesome icons and color classes.
+        // Used by both the REST polling path (updateStatusUI) and the
+        // WebSocket live path (REGIME_CHANGE handler).
+        const REGIME_ICON_MAP = {
+            trending: '<i class="fa-solid fa-chart-line"></i>',
+            ranging:  '<i class="fa-solid fa-arrows-left-right"></i>',
+            volatile: '<i class="fa-solid fa-bolt"></i>',
+            dead:     '<i class="fa-solid fa-skull"></i>',
+            news_event: '<i class="fa-solid fa-newspaper"></i>',
+            bullish:  '<i class="fa-solid fa-arrow-trend-up"></i>',
+            bearish:  '<i class="fa-solid fa-arrow-trend-down"></i>',
+        };
+        const REGIME_CLASS_MAP = {
+            trending: 'regime-trending',
+            ranging:  'regime-ranging',
+            volatile: 'regime-volatile',
+            dead:     'regime-dead',
+            news_event: 'regime-news',
+            bullish:  'regime-bullish',
+            bearish:  'regime-bearish',
+        };
+        const REGIME_FLASH_MAP = {
+            trending:  'flash-green',
+            ranging:   'flash-orange',
+            volatile:  'flash-red',
+            dead:      'flash-orange',
+            news_event:'flash-cyan',
+            bullish:   'flash-green',
+            bearish:   'flash-red',
+        };
+
+        // ── Profile Display Maps ────────────────────────────────────────
+        const PROFILE_ICON_MAP = {
+            default:   '<i class="fa-solid fa-sliders"></i>',
+            scalper:   '<i class="fa-solid fa-bolt"></i>',
+            breakout:  '<i class="fa-solid fa-arrow-right-to-bracket"></i>',
+            daytrader: '<i class="fa-solid fa-calendar-day"></i>',
+        };
+        const PROFILE_CLASS_MAP = {
+            default:   'profile-default',
+            scalper:   'profile-scalper',
+            breakout:  'profile-breakout',
+            daytrader: 'profile-daytrader',
+        };
+        const PROFILE_FLASH_MAP = {
+            default:   'flash-cyan',
+            scalper:   'flash-orange',
+            breakout:  'flash-purple',
+            daytrader: 'flash-green',
+        };
+        const PROFILE_LABEL_MAP = {
+            default:   'Default',
+            scalper:   'Scalper',
+            breakout:  'Breakout',
+            daytrader: 'Day Trader',
+        };
+
+        function updateProfileDisplay(profile, flash) {
+            const badge = document.getElementById('profile-badge');
+            const valEl = document.getElementById('profile-val');
+            const iconEl = document.getElementById('profile-icon');
+            if (!badge || !valEl) return;
+
+            const key = (profile || 'default').toLowerCase();
+            const iconHtml = PROFILE_ICON_MAP[key] || PROFILE_ICON_MAP.default;
+            const cssClass = PROFILE_CLASS_MAP[key] || PROFILE_CLASS_MAP.default;
+            const flashClass = PROFILE_FLASH_MAP[key] || '';
+
+            // Check if profile actually changed
+            const currentKey = valEl.textContent.toLowerCase().trim().replace(/\s+/g, '_');
+            // Handle label-to-key mapping: "Day Trader" → "daytrader"
+            const normalizedKey = key.replace(/[\s_]+/g, '');
+            const normalizedCurrent = currentKey.replace(/[\s_]+/g, '');
+            const profileChanged = normalizedCurrent !== normalizedKey;
+
+            // Update text, icon, and color
+            valEl.textContent = PROFILE_LABEL_MAP[key] || 'Default';
+            if (iconEl) iconEl.innerHTML = iconHtml;
+            badge.className = 'profile-badge ' + cssClass;
+
+            // Flash only on actual profile change from WS event
+            if (flash !== false && profileChanged && flashClass) {
+                badge.classList.remove('flash-cyan', 'flash-orange', 'flash-purple', 'flash-green');
+                void badge.offsetWidth;
+                badge.classList.add(flashClass);
+            }
+        }
+
+        // REGIME_FLASH_MAP is defined once at line ~1822.  No duplicate
+        // — the second declaration was removed; it was identical.
+
+        function updateRegimeDisplay(regime, flash) {
+            const badge = document.getElementById('regime-badge');
+            const valEl = document.getElementById('regime-val');
+            const iconEl = document.getElementById('regime-icon');
+            if (!badge || !valEl) return;
+
+            const key = (regime || 'dead').toLowerCase();
+            const iconHtml = REGIME_ICON_MAP[key] || REGIME_ICON_MAP.dead;
+            const cssClass = REGIME_CLASS_MAP[key] || REGIME_CLASS_MAP.dead;
+            const flashClass = REGIME_FLASH_MAP[key] || '';
+
+            // Check if regime actually changed (to avoid flashing on every REST poll)
+            const currentKey = valEl.textContent.toLowerCase().replace(/\s+/g, '_');
+            const regimeChanged = currentKey !== key;
+
+            // Update text and icon
+            valEl.textContent = key.replace('_', ' ').toUpperCase();
+            if (iconEl) iconEl.innerHTML = iconHtml;
+
+            // Apply color class
+            badge.className = 'regime-badge ' + cssClass;
+
+            // Trigger flash animation only on actual regime change.
+            // REST polling calls with flash=false to avoid noise.
+            if (flash !== false && regimeChanged && flashClass) {
+                badge.classList.remove('flash-green', 'flash-orange', 'flash-red', 'flash-cyan');
+                // Force reflow so the animation replays
+                void badge.offsetWidth;
+                badge.classList.add(flashClass);
+            }
+        }
+
         function updateRiskUI(data) {
-            document.getElementById('regime-val').innerText = data.cooldown_active ? "Cooldown" : "Trending/Ranging";
+            // updateRegimeDisplay is called from updateStatusUI (REST polling)
+            // and the REGIME_CHANGE WS handler — NOT from here.
+            // We keep the regime display in sync via status API's regime field.
             document.getElementById('max-dd-val').innerText = `${data.daily_drawdown_pct.toFixed(2)}% / ${data.daily_drawdown_limit}%`;
             document.getElementById('streak-val').innerText = `${data.consecutive_losses} / ${data.losing_streak_pause}`;
             document.getElementById('cooldown-val').innerText = data.cooldown_active ? "ACTIVE" : "Inactive";
@@ -1263,9 +1942,33 @@
 
         // Action Control Commands
         async function toggleBot() {
-            const label = document.getElementById('status-label').innerText;
-            const action = label === "ACTIVE" ? "pause" : "resume";
-            
+            const label = document.getElementById('status-label');
+            const toggleBtn = document.getElementById('toggle-bot-btn');
+            const badge = document.getElementById('bot-status');
+            const currentLabel = label.innerText;
+            const action = currentLabel === "ACTIVE" ? "pause" : "resume";
+
+            // ── Optimistic UI: immediately show the intended next state ──
+            // Save previous state for rollback on error.
+            var prevHTML = toggleBtn.innerHTML;
+            var prevClass = toggleBtn.className;
+            var prevBadgeClass = badge.className;
+            var prevLabelText = label.innerText;
+
+            if (action === "pause") {
+                // User clicked "Pause" → show "Resume" optimistically
+                toggleBtn.className = 'btn btn-green';
+                toggleBtn.innerHTML = '<i class="fa-solid fa-play"></i> Resume Trading';
+                badge.className = 'bot-status-badge status-paused';
+                label.innerText = 'PAUSED';
+            } else {
+                // User clicked "Resume" → show "Pause" optimistically
+                toggleBtn.className = 'btn btn-outline';
+                toggleBtn.innerHTML = '<i class="fa-solid fa-pause"></i> Pause Trading';
+                badge.className = 'bot-status-badge status-active';
+                label.innerText = 'ACTIVE';
+            }
+
             try {
                 const res = await fetch('/api/control', {
                     method: 'POST',
@@ -1273,11 +1976,22 @@
                     body: JSON.stringify({ action })
                 });
                 const data = await res.json();
-                if (data.status === "success") {
-                    fetchDashboardData();
+                if (data.status !== "success") {
+                    // Rollback on API failure
+                    toggleBtn.className = prevClass;
+                    toggleBtn.innerHTML = prevHTML;
+                    badge.className = prevBadgeClass;
+                    label.innerText = prevLabelText;
+                    console.error('Toggle bot failed:', data.message);
                 }
+                // Regardless, poll will sync the true state on next cycle
             } catch (err) {
-                console.error("Control toggle bot command failed: ", err);
+                // Rollback on network error
+                toggleBtn.className = prevClass;
+                toggleBtn.innerHTML = prevHTML;
+                badge.className = prevBadgeClass;
+                label.innerText = prevLabelText;
+                console.error('Control toggle bot command failed: ', err);
             }
         }
 
@@ -1449,7 +2163,17 @@
         }
 
         window.addEventListener('DOMContentLoaded', () => {
-            initChart();
+            // Chart.js is loaded with defer — it may or may not be ready
+            // by the time DOMContentLoaded fires.  If not, poll briefly.
+            function _tryInitChart() {
+                if (typeof Chart !== 'undefined') {
+                    initChart();
+                } else {
+                    // Chart.js still loading — retry after a short delay
+                    setTimeout(_tryInitChart, 200);
+                }
+            }
+            _tryInitChart();
             loadSettings();
             checkLauncherInfo();
             startPolling();
@@ -1474,8 +2198,11 @@
             const cancelBtn = document.getElementById('copilot-cancel');
             const clearBtn = document.getElementById('copilot-clear');
             const loading = document.getElementById('copilot-loading');
+            const cooldownEl = document.getElementById('copilot-cooldown');
+            const cooldownCount = document.getElementById('copilot-cooldown-count');
             const transcript = document.getElementById('copilot-transcript');
             let streamController = null;
+            let cooldownTimer = null;
             function escapeHtml(s) { return String(s).replace(/[&<>]/g, c => ({'&':'&', '<':'<', '>':'>'}[c])); }
             function renderAnswerWithChips(text) {
                 const frag = document.createDocumentFragment();
@@ -1514,6 +2241,26 @@
                 }
                 transcript.appendChild(div);
                 transcript.scrollTop = transcript.scrollHeight;
+            }
+            function startCopilotCooldown(seconds) {
+                if (cooldownTimer) { clearInterval(cooldownTimer); cooldownTimer = null; }
+                cooldownEl.style.display = '';
+                sendBtn.disabled = true;
+                input.disabled = true;
+                let remaining = Math.ceil(seconds || 10);
+                cooldownCount.textContent = remaining;
+                cooldownTimer = setInterval(function() {
+                    remaining--;
+                    if (remaining <= 0) {
+                        clearInterval(cooldownTimer);
+                        cooldownTimer = null;
+                        cooldownEl.style.display = 'none';
+                        sendBtn.disabled = false;
+                        input.disabled = false;
+                    } else {
+                        cooldownCount.textContent = remaining;
+                    }
+                }, 1000);
             }
             function setEnabled(enabled) {
                 input.disabled = !enabled;
@@ -1579,7 +2326,22 @@
                                 try {
                                     const evt = JSON.parse(payload);
                                     if (evt.type === 'done') { answer = evt.answer || ''; citations = evt.citations || []; }
-                                    else if (evt.type === 'error') { appendMessage('bot', String(evt.content || 'unknown error')); answer = ''; break; }
+                                    else if (evt.type === 'error') {
+                                        if (evt.rate_limited) {
+                                            appendMessage('bot', String(evt.content || 'Rate limited'));
+                                            // Prefer the structured retry_seconds; fall back to
+                                            // regex-parsing the message for older payloads.
+                                            var secs = evt.retry_seconds;
+                                            if (!secs) {
+                                                var secMatch = String(evt.content || '').match(/wait\s+([\d.]+)s/);
+                                                secs = secMatch ? Math.ceil(parseFloat(secMatch[1])) : 10;
+                                            }
+                                            startCopilotCooldown(Number(secs));
+                                        } else {
+                                            appendMessage('bot', String(evt.content || 'unknown error'));
+                                        }
+                                        answer = ''; break;
+                                    }
                                 } catch (_) {}
                             }
                         }
@@ -1596,6 +2358,406 @@
             });
             cancelBtn.addEventListener('click', function() { if (streamController) streamController.abort(); });
             clearBtn.addEventListener('click', function() { transcript.innerHTML = ''; clearBtn.style.display = 'none'; });
-        })();    </script>
+        })();    
+
+        // ── Log Viewer (Fix #14) ───────────────────────────────────
+        function openLogViewer() {
+            document.getElementById('log-viewer-modal').style.display = 'flex';
+            loadLogLines();
+        }
+        function closeLogViewer() {
+            document.getElementById('log-viewer-modal').style.display = 'none';
+        }
+        let logRefreshTimer = null;
+        async function loadLogLines() {
+            const content = document.getElementById('log-viewer-content');
+            const info = document.getElementById('log-viewer-info');
+            const level = document.getElementById('log-level-filter').value;
+            const module = document.getElementById('log-module-filter').value;
+            let url = '/api/logs?lines=500';
+            if (level) url += '&level=' + encodeURIComponent(level);
+            if (module) url += '&module=' + encodeURIComponent(module);
+            content.textContent = 'Loading...';
+            try {
+                const r = await fetch(url);
+                if (!r.ok) { content.textContent = 'Failed to load logs: ' + r.status; return; }
+                const data = await r.json();
+                if (data.lines && data.lines.length > 0) {
+                    content.textContent = data.lines.join('');
+                    info.textContent = 'File: ' + data.file + ' | Lines: ' + data.total + (data.filtered ? ' (filtered)' : '') + ' | Auto-refresh every 5s';
+                } else {
+                    content.textContent = '(no log lines match the current filters)';
+                    info.textContent = 'File: ' + data.file + ' | No matching lines';
+                }
+            } catch (e) {
+                content.textContent = 'Error loading logs: ' + e;
+            }
+            // Auto-refresh every 5s while modal is open
+            if (logRefreshTimer) clearInterval(logRefreshTimer);
+            logRefreshTimer = setInterval(function() {
+                if (document.getElementById('log-viewer-modal').style.display === 'flex') {
+                    loadLogLines();
+                } else {
+                    clearInterval(logRefreshTimer);
+                    logRefreshTimer = null;
+                }
+            }, 5000);
+        }
+        // Also refresh logs when filter changes
+        document.getElementById('log-level-filter').addEventListener('change', loadLogLines);
+        document.getElementById('log-module-filter').addEventListener('input', function() {
+            if (logRefreshTimer) clearInterval(logRefreshTimer);
+            logRefreshTimer = setTimeout(loadLogLines, 500); // debounce
+        });
+
+        // ── Manual Trade (Fix #13) ──────────────────────────────────
+        async function manualOpenTrade(e) {
+            e.preventDefault();
+            const symbol = document.getElementById('mt-symbol').value.trim().toUpperCase();
+            const direction = document.getElementById('mt-direction').value;
+            const volume = parseFloat(document.getElementById('mt-volume').value);
+            const sl = parseFloat(document.getElementById('mt-sl').value);
+            const tp = parseFloat(document.getElementById('mt-tp').value);
+            const resultEl = document.getElementById('mt-result');
+
+            if (!symbol) { showMtResult('error', 'Symbol is required'); return; }
+            if (isNaN(volume) || volume <= 0) { showMtResult('error', 'Invalid volume'); return; }
+            if (isNaN(sl) || isNaN(tp)) { showMtResult('error', 'SL and TP are required'); return; }
+
+            // Show loading state
+            resultEl.style.display = '';
+            resultEl.style.background = 'rgba(0, 242, 254, 0.05)';
+            resultEl.style.border = '1px solid rgba(0, 242, 254, 0.15)';
+            resultEl.style.color = 'var(--text-secondary)';
+            resultEl.textContent = 'Opening trade...';
+
+            try {
+                const r = await fetch('/api/trades/manual-open?symbol=' + encodeURIComponent(symbol) +
+                    '&direction=' + encodeURIComponent(direction) +
+                    '&volume=' + volume +
+                    '&sl=' + sl +
+                    '&tp=' + tp, {
+                    method: 'POST',
+                });
+                const data = await r.json();
+                if (r.ok && data.ok) {
+                    showMtResult('success', 'Opened ' + symbol + ' ' + direction + ' | Ticket: #' + data.ticket);
+                    fetchDashboardData();
+                } else {
+                    showMtResult('error', 'Failed: ' + (data.detail || data.message || 'Unknown error'));
+                }
+            } catch (err) {
+                showMtResult('error', 'Error: ' + (err.message || err));
+            }
+        }
+        function showMtResult(type, msg) {
+            const el = document.getElementById('mt-result');
+            el.style.display = '';
+            if (type === 'success') {
+                el.style.background = 'rgba(0, 230, 118, 0.08)';
+                el.style.border = '1px solid rgba(0, 230, 118, 0.2)';
+                el.style.color = 'var(--accent-green)';
+            } else {
+                el.style.background = 'rgba(255, 23, 68, 0.08)';
+                el.style.border = '1px solid rgba(255, 23, 68, 0.2)';
+                el.style.color = 'var(--accent-red)';
+            }
+            el.textContent = msg;
+            // Auto-hide after 8 seconds
+            setTimeout(function() { if (el.textContent === msg) el.style.display = 'none'; }, 8000);
+        }
+
+        // ── Close modals on Escape key ──────────────────────────────
+        document.addEventListener('keydown', function(ev) {
+            if (ev.key === 'Escape') {
+                document.querySelectorAll('.modal[style*="display: flex"]').forEach(function(m) {
+                    m.style.display = 'none';
+                });
+            }
+        });
+        // ── Event Toast System ────────────────────────────────────────
+        function showToast(message, type = 'info', icon = 'fa-circle-info', duration = 4000) {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = `toast toast-${type}`;
+            toast.innerHTML = `<i class="fa-solid ${icon}"></i><span>${message}</span><button class="toast-close" onclick="this.parentElement.classList.add('toast-out');setTimeout(()=>this.parentElement.remove(),300)">&times;</button>`;
+            container.appendChild(toast);
+            setTimeout(() => {
+                if (toast.parentElement) {
+                    toast.classList.add('toast-out');
+                    setTimeout(() => toast.remove(), 300);
+                }
+            }, duration);
+        }
+
+        // ── WebSocket Connection Manager ──────────────────────────────
+        let ws = null;
+        let wsReconnectTimer = null;
+        let wsReconnectAttempts = 0;
+        const WS_MAX_RECONNECT_ATTEMPTS = 20;
+        const WS_RECONNECT_BASE_DELAY = 1000;
+        const WS_RECONNECT_MAX_DELAY = 30000;
+
+        // ── Live Ticker state ─────────────────────────────────────────
+        // Stores the latest price for each symbol to detect direction changes
+        // and flash the direction indicator. Keyed by symbol.
+        const _latestTicks = {};
+
+        function updateTicker(symbol, bid, ask, spread) {
+            // Lazily-create the ticker strip if it's still showing placeholder
+            const strip = document.getElementById('ticker-strip');
+            if (!strip) return;
+
+            const empty = document.getElementById('ticker-empty');
+            if (empty) empty.remove();
+
+            // Find or create the ticker-item element for this symbol
+            let item = document.getElementById('ticker-' + symbol);
+            const prev = _latestTicks[symbol];
+
+            if (!item) {
+                // Create new ticker item
+                item = document.createElement('span');
+                item.id = 'ticker-' + symbol;
+                item.className = 'ticker-item';
+                item.innerHTML = '' +
+                    '<span class="ticker-sym">' + symbol + '</span>' +
+                    '<span class="ticker-bid">' + (bid != null ? bid.toFixed(5) : '—') + '</span>' +
+                    '<span class="ticker-ask">' + (ask != null ? ask.toFixed(5) : '—') + '</span>' +
+                    '<span class="ticker-spread"></span>' +
+                    '<span class="ticker-price-change flat">–</span>' +
+                    '<span class="ticker-sep">|</span>';
+                strip.appendChild(item);
+            }
+
+            // Update bid/ask values
+            if (bid != null) {
+                const bidEl = item.querySelector('.ticker-bid');
+                if (bidEl) bidEl.textContent = bid.toFixed(5);
+            }
+            if (ask != null) {
+                const askEl = item.querySelector('.ticker-ask');
+                if (askEl) askEl.textContent = ask.toFixed(5);
+            }
+
+            // Update spread badge (pip size depends on symbol)
+            if (spread != null) {
+                const spreadEl = item.querySelector('.ticker-spread');
+                if (spreadEl) {
+                    // Derive pip multiplier from symbol conventions:
+                    //   JPY pairs → 1 pip = 0.01
+                    //   XAU/XAG metals → 1 pip = 0.1
+                    //   All others (EURUSD, GBPUSD, etc.) → 1 pip = 0.0001
+                    var pipMult = 10000;
+                    if (symbol.endsWith('JPY')) {
+                        pipMult = 100;
+                    } else if (symbol.startsWith('XAU') || symbol.startsWith('XAG')) {
+                        pipMult = 10;
+                    }
+                    var spreadPips = spread * pipMult;
+                    spreadEl.textContent = spreadPips.toFixed(1) + 'p';
+                    // Color-code: tight < 5 pips, medium < 15, wide >= 15
+                    spreadEl.className = 'ticker-spread ' + (
+                        spreadPips < 5 ? 'tight' :
+                        spreadPips < 15 ? 'medium' : 'wide'
+                    );
+                }
+            }
+
+            // Price direction indicator with flash animation
+            if (prev && bid != null) {
+                const delta = bid - prev.bid;
+                const dirEl = item.querySelector('.ticker-price-change');
+                if (dirEl) {
+                    if (Math.abs(delta) > 1e-8) {
+                        dirEl.className = 'ticker-price-change ' + (delta > 0 ? 'up' : 'down');
+                        dirEl.textContent = delta > 0 ? '▲' : '▼';
+                    } else {
+                        dirEl.className = 'ticker-price-change flat';
+                        dirEl.textContent = '–';
+                    }
+                }
+            }
+
+            // Store latest prices for next comparison
+            _latestTicks[symbol] = { bid, ask, time: Date.now() };
+        }
+
+        function getWsUrl() {
+            const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            return `${proto}//${window.location.host}/ws/feed`;
+        }
+
+        function updateWsBadge(state) {
+            const badge = document.getElementById('ws-badge');
+            const label = document.getElementById('ws-label');
+            badge.className = `ws-badge ws-${state}`;
+            if (state === 'connected') {
+                label.innerText = 'WS';
+                badge.title = 'WebSocket connected';
+            } else if (state === 'connecting') {
+                label.innerText = '...';
+                badge.title = 'WebSocket connecting...';
+            } else {
+                label.innerText = 'WS';
+                badge.title = 'WebSocket disconnected';
+            }
+        }
+
+        function connectWebSocket() {
+            if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
+                return;
+            }
+            updateWsBadge('connecting');
+            try {
+                ws = new WebSocket(getWsUrl());
+            } catch (e) {
+                console.error('WS: Connection failed:', e);
+                updateWsBadge('disconnected');
+                scheduleWsReconnect();
+                return;
+            }
+
+            ws.onopen = function() {
+                console.log('WS: Connected');
+                wsReconnectAttempts = 0;
+                updateWsBadge('connected');
+            };
+
+            ws.onmessage = function(event) {
+                try {
+                    const msg = JSON.parse(event.data);
+                    handleWsEvent(msg);
+                } catch (e) {
+                    console.error('WS: Failed to parse message:', e);
+                }
+            };
+
+            ws.onclose = function() {
+                console.log('WS: Disconnected');
+                updateWsBadge('disconnected');
+                scheduleWsReconnect();
+            };
+
+            ws.onerror = function(err) {
+                console.error('WS: Error:', err);
+            };
+        }
+
+        function scheduleWsReconnect() {
+            if (wsReconnectTimer) {
+                clearTimeout(wsReconnectTimer);
+            }
+            if (wsReconnectAttempts >= WS_MAX_RECONNECT_ATTEMPTS) {
+                console.warn('WS: Max reconnect attempts reached');
+                return;
+            }
+            // Full jitter: randomize within [0, capped_exponential_backoff]
+            // to spread reconnection load and avoid tight reconnect loops
+            // when the server is down.  (AWS exponential-backoff best practice.)
+            const base = Math.min(
+                WS_RECONNECT_BASE_DELAY * Math.pow(1.5, wsReconnectAttempts),
+                WS_RECONNECT_MAX_DELAY
+            );
+            const delay = Math.random() * base;
+            wsReconnectAttempts++;
+            wsReconnectTimer = setTimeout(function() {
+                connectWebSocket();
+            }, delay);
+        }
+
+        function sendWsPing() {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send('ping');
+            }
+        }
+
+        // ── WebSocket Event Handlers ──────────────────────────────────
+        function handleWsEvent(msg) {
+            const eventType = msg.event_type || '';
+            const data = msg.data || {};
+
+            switch (eventType) {
+                case 'HANDSHAKE':
+                    console.log('WS: Handshake received —', data.msg);
+                    updateWsBadge('connected');
+                    break;
+
+                case 'TICK':
+                    // Ticks are high-frequency — update the live ticker
+                    // without touching the full UI on every tick.
+                    if (data.symbol) {
+                        updateTicker(data.symbol, data.bid, data.ask, data.spread);
+                    }
+                    break;
+
+                case 'TRADE_OPEN':
+                    showToast(
+                        `${data.symbol} ${data.direction.toUpperCase()} opened (T${data.ticket})`,
+                        'info', 'fa-arrow-trend-up', 5000
+                    );
+                    // Refresh the full dashboard to pick up the new position
+                    fetchDashboardData();
+                    break;
+
+                case 'TRADE_CLOSE': {
+                    const isWin = (data.profit || 0) >= 0;
+                    const toastType = isWin ? 'win' : 'loss';
+                    const icon = isWin ? 'fa-circle-check' : 'fa-circle-xmark';
+                    const sign = isWin ? '+' : '';
+                    showToast(
+                        `${data.symbol} ${data.direction.toUpperCase()} closed — ${sign}$${(data.profit || 0).toFixed(2)}`,
+                        toastType, icon, 6000
+                    );
+                    fetchDashboardData();
+                    break;
+                }
+
+                case 'REGIME_CHANGE':
+                    showToast(
+                        `Regime: ${(data.old_regime || '?').toUpperCase()} → ${data.new_regime.toUpperCase()}`,
+                        'info', 'fa-shield-halved', 5000
+                    );
+                    // Immediately update the regime display with color + icon + flash
+                    updateRegimeDisplay(data.new_regime, true);
+                    fetchDashboardData();
+                    break;
+
+                case 'PROFILE_CHANGED':
+                    showToast(
+                        `Profile switched to ${data.new_profile.toUpperCase()}`,
+                        'info', 'fa-arrows-rotate', 4000
+                    );
+                    // Immediately update the profile display with color + icon + flash
+                    updateProfileDisplay(data.new_profile, true);
+                    fetchDashboardData();
+                    break;
+
+                case 'OVERRIDE_TRIGGERED':
+                    showToast(
+                        `Override: ${data.action} — ${data.reason || data.result || ''}`,
+                        'warn', 'fa-triangle-exclamation', 6000
+                    );
+                    fetchDashboardData();
+                    break;
+
+                case 'PONG':
+                    // Keepalive response — nothing to do
+                    break;
+
+                default:
+                    console.log('WS: Unknown event type:', eventType, data);
+            }
+        }
+
+        // ── Periodic WebSocket keepalive ping ─────────────────────────
+        setInterval(function() {
+            sendWsPing();
+        }, 25000);
+
+        // ── Initiate WebSocket connection on page load ─────────────────
+        connectWebSocket();
+
+    </script>
 </body>
 </html>

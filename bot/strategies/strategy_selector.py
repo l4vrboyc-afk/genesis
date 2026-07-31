@@ -8,6 +8,7 @@ For Day Trader profile, implements a 3×14 matrix approach:
 - Session-aware routing prevents signal collisions
 """
 
+import asyncio
 import numpy as np
 import pandas as pd
 from datetime import datetime, time
@@ -15,7 +16,24 @@ from typing import Optional
 from loguru import logger
 from enum import Enum
 
-from bot.config.settings import settings, MarketRegime
+# Late import to avoid circular dependency; wrapped in try/except for safety.
+try:
+    from bot.notifications.notification_manager import notification_manager
+    _NOTIFICATION_AVAILABLE = True
+except ImportError:
+    _NOTIFICATION_AVAILABLE = False
+
+# Lazy import of the WebSocket broadcasting engine (dashboard may not be
+# initialised in CLI-only mode). The ws_manager is a no-op when no browser
+# clients are connected, so these calls are safe everywhere.
+try:
+    from dashboard.backend.ws_manager import ws_manager
+    from dashboard.backend.schemas import WSEventPayload
+    _WS_AVAILABLE = True
+except ImportError:
+    _WS_AVAILABLE = False
+
+from bot.config.settings import settings, MarketRegime, TradeDirection
 from bot.strategies.base_strategy import BaseStrategy, TradeSignal
 from bot.strategies.smart_trend import SmartTrendStrategy
 from bot.strategies.mean_reversion import MeanReversionStrategy
@@ -169,8 +187,9 @@ class StrategySelector:
             else:
                 elapsed = (now - self._candidate_since).total_seconds()
                 if elapsed >= settings.hysteresis_window_seconds:
+                    old_regime = self._current_regime
                     logger.info(
-                        f"🔄 Hysteresis cleared: {self._current_regime} → {regime} "
+                        f"🔄 Hysteresis cleared: {old_regime} → {regime} "
                         f"(held candidate for {elapsed:.0f}s, "
                         f"window {settings.hysteresis_window_seconds}s; "
                         f"ADX={adx:.1f}, ATR ratio={atr_ratio:.2f})"
@@ -185,6 +204,47 @@ class StrategySelector:
                         "atr_ratio": atr_ratio,
                         "elapsed_s": elapsed,
                     })
+                    # Fire Discord regime change alert (fire-and-forget task).
+                    # Keep a strong reference on the instance so the task
+                    # isn't garbage-collected before the alert is sent.
+                    if _NOTIFICATION_AVAILABLE:
+                        try:
+                            _tasks = getattr(self, "_bg_tasks", None)
+                            if _tasks is None:
+                                _tasks = self._bg_tasks = set()
+                            _task = asyncio.create_task(notification_manager.notify_regime_change(
+                                old_regime=str(old_regime.value) if old_regime else "unknown",
+                                new_regime=str(regime.value),
+                                adx=adx,
+                                atr_ratio=atr_ratio,
+                            ))
+                            _tasks.add(_task)
+                            _task.add_done_callback(_tasks.discard)
+                        except Exception:
+                            pass
+
+                    # Broadcast regime change to WebSocket dashboard clients
+                    if _WS_AVAILABLE:
+                        try:
+                            _ws_tasks = getattr(self, "_ws_tasks", None)
+                            if _ws_tasks is None:
+                                _ws_tasks = self._ws_tasks = set()
+                            _ws_task = asyncio.create_task(ws_manager.broadcast(
+                                WSEventPayload(
+                                    event_type="REGIME_CHANGE",
+                                    timestamp=datetime.now().isoformat(),
+                                    data={
+                                        "old_regime": str(old_regime.value) if old_regime else "unknown",
+                                        "new_regime": str(regime.value),
+                                        "adx": float(adx) if not isinstance(adx, float) else adx,
+                                        "atr_ratio": float(atr_ratio) if not isinstance(atr_ratio, float) else atr_ratio,
+                                    },
+                                )
+                            ))
+                            _ws_tasks.add(_ws_task)
+                            _ws_task.add_done_callback(_ws_tasks.discard)
+                        except Exception:
+                            pass
                 else:
                     logger.debug(
                         f"⏳ Regime candidate {regime} pending "
@@ -280,7 +340,233 @@ class StrategySelector:
 
         return signal
 
-    # ── Day Trader Multi-Strategy Evaluation ─────────────────────────────
+    # ── Rule 1: Gatekeeper Trend Guard ────────────────────────────────────
+    # Blocks SELL signals when the H1 timeframe shows a strong uptrend:
+    #   ADX > 25  AND  Price > 50 EMA
+
+    def check_gatekeeper(
+        self,
+        symbol: str,
+        gatekeeper_data: dict,
+        signal_direction: TradeDirection,
+    ) -> bool:
+        """Rule 1: Gatekeeper Trend Guard 🛑
+
+        Blocks SELL trades during strong H1 uptrends.
+        Returns True if the signal is allowed through, False if blocked.
+
+        The Gatekeeper only applies to SELL signals — BUY signals always pass.
+        If gatekeeper data is unavailable (None / empty dict / NaN values),
+        the signal is allowed through (fail-open).
+
+        Args:
+            symbol: Trading pair symbol (for logging).
+            gatekeeper_data: Dict with keys ``adx``, ``ema_50``, ``close``
+                (from ``DataFetcher.get_gatekeeper_indicators()``).
+            signal_direction: The proposed trade direction.
+
+        Returns:
+            True if the trade is allowed, False if gatekeeper blocks it.
+        """
+        # Only gatekeep SELL signals
+        if signal_direction != TradeDirection.SELL:
+            return True
+
+        # Can't determine trend — allow through (fail-open)
+        if gatekeeper_data is None:
+            return True
+
+        adx = gatekeeper_data.get("adx")
+        ema_50 = gatekeeper_data.get("ema_50")
+        close = gatekeeper_data.get("close")
+
+        if adx is None or ema_50 is None or close is None:
+            return True
+
+        # The core gatekeeper logic:
+        # If ADX > 25 AND price is above the 50 EMA, sellers must wait.
+        if adx > settings.gatekeeper_adx_threshold and close > ema_50:
+            logger.info(
+                f"🚫 GATEKEEPER blocked SELL on {symbol}: "
+                f"ADX={adx:.1f} (>{settings.gatekeeper_adx_threshold}) "
+                f"AND Price={close:.5f} > EMA50={ema_50:.5f} — strong uptrend in play"
+            )
+            return False
+
+        return True
+
+    # ── Rule 3: M15 Sniper Confirmation ────────────────────────────────
+    # Requires the latest M15 candle to confirm the intended direction:
+    #   SELL: lower high + bearish close
+    #   BUY:  higher low + bullish close
+
+    def check_sniper_confirmation(
+        self,
+        entry_tf_data: pd.DataFrame,
+        direction: TradeDirection,
+    ) -> bool:
+        """Rule 3: M15 Sniper Confirmation 🎯
+
+        Waits for the M15 chart to physically prove momentum has turned
+        before allowing entry.  For SELLs: latest high < previous high
+        (lower high) AND latest close < latest open (bearish close).
+        For BUYs: latest low > previous low (higher low) AND latest
+        close > latest open (bullish close).
+
+        Args:
+            entry_tf_data: M15 (or entry timeframe) DataFrame with OHLC.
+            direction: The proposed trade direction.
+
+        Returns:
+            True if the pattern is confirmed (or sniper is disabled), False
+            if the pattern does not support entry.
+        """
+        if not settings.sniper_confirmation_enabled:
+            return True
+
+        if entry_tf_data is None or len(entry_tf_data) < 3:
+            logger.debug("⏳ Sniper — insufficient candle data (< 3 bars)")
+            return False
+
+        candle_prev = entry_tf_data.iloc[-2]  # One bar back
+        candle_latest = entry_tf_data.iloc[-1]  # Current / latest bar
+
+        if direction == TradeDirection.SELL:
+            # Lower high: latest high < previous high
+            lower_high = candle_latest["high"] < candle_prev["high"]
+            # Bearish close: close price < open price
+            bearish_close = candle_latest["close"] < candle_latest["open"]
+
+            if lower_high and bearish_close:
+                logger.debug(
+                    f"🎯 Sniper SELL confirmed: lower high "
+                    f"({candle_latest['high']:.5f} < {candle_prev['high']:.5f}) "
+                    f"+ bearish close ({candle_latest['close']:.5f} < {candle_latest['open']:.5f})"
+                )
+                return True
+
+            logger.debug(
+                f"⏳ Sniper SELL waiting — lower_high={lower_high}, "
+                f"bearish_close={bearish_close}"
+            )
+            return False
+
+        elif direction == TradeDirection.BUY:
+            # Higher low: latest low > previous low
+            higher_low = candle_latest["low"] > candle_prev["low"]
+            # Bullish close: close price > open price
+            bullish_close = candle_latest["close"] > candle_latest["open"]
+
+            if higher_low and bullish_close:
+                logger.debug(
+                    f"🎯 Sniper BUY confirmed: higher low "
+                    f"({candle_latest['low']:.5f} > {candle_prev['low']:.5f}) "
+                    f"+ bullish close ({candle_latest['close']:.5f} > {candle_latest['open']:.5f})"
+                )
+                return True
+
+            logger.debug(
+                f"⏳ Sniper BUY waiting — higher_low={higher_low}, "
+                f"bullish_close={bullish_close}"
+            )
+            return False
+
+        return True
+
+        return True
+
+# ── 5-Gate Evaluator ──────────────────────────────────────────────────
+# All 5 gates are evaluated in a single structured call. Minimum 4/5 must pass.
+# Returns dict with gate names + pass/fail status for logging and WS broadcast.
+#
+# Gates implemented:
+#   1. Gatekeeper   — ADX/EMA trend guard (SELL-only; fail-open)
+#   2. Sniper       — M15 candle pattern confirmation
+#   3. Volume       — latest bar volume >= threshold x 20-bar avg
+#   4. EMA Stack    — price stacked with EMA50 + EMA200 (HTF)
+#   5. ADX Strength — ADX >= 20 (trend has conviction; fail-open on NaN)
+#
+# NOTE: RSI Momentum gate removed pending entry-TF data alignment --
+# current `etf_data` from get_analyzed_data uses column 'rsi_14' (lowercase)
+# not 'RSI_14'. Gate 5 will be added once column naming is confirmed.
+
+def evaluate_gates(
+    self,
+    signal: TradeSignal,
+    gatekeeper_data: Optional[dict],
+    entry_tf_data: Optional[pd.DataFrame],
+    htf_data: Optional[pd.DataFrame],
+) -> dict:
+    """Evaluate all 5 gates, return pass/fail summary.
+    Args:
+        signal: Proposed trade signal
+        gatekeeper_data: Dict from DataFetcher.get_gatekeeper_indicators()
+            with keys: adx, ema_50, atr, close
+        entry_tf_data: Entry TF DataFrame (M15/M1) from get_analyzed_data()
+        htf_data: Higher TF DataFrame (H4/H1) from get_analyzed_data()
+    Returns:
+        Dict with 'passed', 'total', 'gates' list, and 'allowed' bool
+    """
+    gates = []
+    direction = signal.direction.value  # 'buy' or 'sell'
+
+    # ── Gate 1: Gatekeeper (ADX + EMA50 trend guard) ───────────────
+    gk_pass = self.check_gatekeeper(signal.symbol, gatekeeper_data, signal.direction)
+    gates.append({"name": "gatekeeper", "passed": gk_pass})
+
+    # ── Gate 2: Sniper (M15 candle pattern) ────────────────────────
+    sniper_pass = self.check_sniper_confirmation(entry_tf_data, signal.direction)
+    gates.append({"name": "sniper", "passed": sniper_pass})
+
+    # ── Gate 3: Volume (latest bar >= threshold x 20-bar avg) ──────
+    vol_pass = True  # fail-open
+    if entry_tf_data is not None and not entry_tf_data.empty:
+        vol_col = 'tick_volume' if 'tick_volume' in entry_tf_data.columns else 'volume'
+        if vol_col in entry_tf_data.columns:
+            latest_vol = entry_tf_data[vol_col].iloc[-1]
+            # Compute 20-bar average inline
+            vol_avg = entry_tf_data[vol_col].tail(20).mean()
+            if vol_avg > 0 and not pd.isna(latest_vol):
+                threshold = getattr(settings, 'volume_surge_ratio', 1.5)
+                vol_pass = latest_vol >= (threshold * vol_avg)
+    gates.append({"name": "volume", "passed": vol_pass})
+
+    # ── Gate 4: EMA Alignment (price stacked with EMA50 + EMA200) ──
+    ema_pass = True  # fail-open
+    if htf_data is not None and not htf_data.empty:
+        close = htf_data['close'].iloc[-1]
+        # Find EMA columns (data_fetcher names them ema_{period})
+        ema_cols = [c for c in htf_data.columns if c.startswith('ema_')]
+        if len(ema_cols) >= 2:
+            ema50_col = next((c for c in ema_cols if '50' in c), ema_cols[0])
+            ema200_col = next((c for c in ema_cols if '200' in c), ema_cols[-1])
+            ema50 = htf_data[ema50_col].iloc[-1]
+            ema200 = htf_data[ema200_col].iloc[-1]
+            if not any(pd.isna(v) for v in [close, ema50, ema200]):
+                stacked_bull = close > ema50 > ema200
+                stacked_bear = close < ema50 < ema200
+                ema_pass = stacked_bull or stacked_bear
+    gates.append({"name": "ema_alignment", "passed": ema_pass})
+
+    # ── Gate 5: ADX Strength (ADX >= 20 = trend has conviction) ────
+    adx_pass = True  # fail-open on NaN/missing
+    adx_val = None
+    if gatekeeper_data is not None:
+        adx_val = gatekeeper_data.get('adx')
+    elif htf_data is not None and not htf_data.empty and 'adx' in htf_data.columns:
+        adx_val = htf_data['adx'].iloc[-1]
+    if adx_val is not None and not pd.isna(adx_val):
+        adx_pass = adx_val >= 20.0
+    gates.append({"name": "adx_strength", "passed": adx_pass})
+
+    # ── Gate Result ─────────────────────────────────────────────────
+    passed = sum(1 for g in gates if g["passed"])
+    allowed = passed >= 4
+    return {"passed": passed, "total": 5, "gates": gates, "allowed": allowed}
+
+
+def _get_session_from_time(self) -> SessionType:
+
     # For the daytrader profile, evaluate all 3 strategies and return best signal
 
     def _get_session_from_time(self) -> SessionType:
@@ -390,6 +676,29 @@ class StrategySelector:
         self._current_regime = regime
         logger.warning(f"⚡ Regime forced: {old} → {regime}")
 
+        # Broadcast forced regime change to WebSocket dashboard clients
+        if _WS_AVAILABLE:
+            try:
+                _ws_tasks = getattr(self, "_ws_tasks", None)
+                if _ws_tasks is None:
+                    _ws_tasks = self._ws_tasks = set()
+                _ws_task = asyncio.create_task(ws_manager.broadcast(
+                    WSEventPayload(
+                        event_type="REGIME_CHANGE",
+                        timestamp=datetime.now().isoformat(),
+                        data={
+                            "old_regime": str(old.value) if old else "unknown",
+                            "new_regime": str(regime.value),
+                            "forced": True,
+                            "reason": "manual override",
+                        },
+                    )
+                ))
+                _ws_tasks.add(_ws_task)
+                _ws_task.add_done_callback(_ws_tasks.discard)
+            except Exception:
+                pass
+
     def release_forced_regime(self) -> None:
         """
         Clear any user-forced regime so detect_regime() resumes auto-classification.
@@ -411,6 +720,29 @@ class StrategySelector:
             "released": True,
         })
         logger.warning(f"🔓 Forced regime released: {old.value} → auto")
+
+        # Broadcast regime release to WebSocket dashboard clients
+        if _WS_AVAILABLE:
+            try:
+                _ws_tasks = getattr(self, "_ws_tasks", None)
+                if _ws_tasks is None:
+                    _ws_tasks = self._ws_tasks = set()
+                _ws_task = asyncio.create_task(ws_manager.broadcast(
+                    WSEventPayload(
+                        event_type="REGIME_CHANGE",
+                        timestamp=datetime.now().isoformat(),
+                        data={
+                            "old_regime": str(old.value) if old else "unknown",
+                            "new_regime": "auto",
+                            "forced": False,
+                            "reason": "forced regime released",
+                        },
+                    )
+                ))
+                _ws_tasks.add(_ws_task)
+                _ws_task.add_done_callback(_ws_tasks.discard)
+            except Exception:
+                pass
 
     def get_regime_stats(self) -> dict:
         """Get statistics about regime detection history."""

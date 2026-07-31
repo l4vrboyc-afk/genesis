@@ -8,7 +8,7 @@ import asyncio
 import itertools
 import queue
 import threading
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import MetaTrader5 as mt5
 from loguru import logger
 from typing import List
@@ -24,6 +24,27 @@ from bot.strategies.strategy_selector import StrategySelector
 from bot.notifications.notification_manager import notification_manager
 from database.db_manager import DatabaseManager
 from bot.core.data_logger import start_tick_logger, enqueue_tick
+from bot.core.dynamic_trailing import DynamicTrailingManager
+from bot.visual import GenesisVisualEngine
+
+# Lazy import of the WebSocket broadcasting engine (dashboard may not be
+# initialised in CLI-only mode).  The ws_manager singleton is a no-op when
+# no browser clients are connected, so these calls are safe everywhere.
+try:
+    from dashboard.backend.ws_manager import ws_manager
+    from dashboard.backend.schemas import WSEventPayload
+    _WS_AVAILABLE = True
+except ImportError:
+    _WS_AVAILABLE = False
+
+
+# ── Constants ──────────────────────────────────────────────────────────
+
+# P&L tolerance (in dollars) for DB-vs-MT5 consistency checks. If the
+# profit stored in the database differs from MT5's deal history by more
+# than this, the orchestrator logs a WARNING so the operator can catch
+# data corruption live — rather than discovering it later in the dashboard.
+PNL_TOLERANCE = 0.05
 
 
 # ── Module-level helpers (used by AsyncMt5Executor callers) ─────────────
@@ -168,6 +189,7 @@ class TradingOrchestrator:
         self.news_filter = NewsFilter()
         self.performance_tracker = PerformanceTracker()
         self.strategy_selector = StrategySelector()
+        self.dynamic_trailing = DynamicTrailingManager(self.fetcher, self.order_manager)
 
         # Single-threaded executor serialises all MT5 calls behind a simple
         # async queue — no asyncio.Lock contention, no event-loop starvation.
@@ -195,6 +217,7 @@ class TradingOrchestrator:
         self._was_connected: bool = False
         self._kill_switch_fired: bool = False
 
+
     async def start(self):
         """Initialize connections and start the background trading loop."""
         if self._running:
@@ -212,6 +235,7 @@ class TradingOrchestrator:
         self.mt5_conn.attach_executor(self._mt5)
         self.fetcher.attach_executor(self._mt5)
         self.order_manager.attach_executor(self._mt5)
+        self.dynamic_trailing.attach_executor(self._mt5)
 
         # 1. Initialize DB
         await self.db.init_db()
@@ -242,6 +266,12 @@ class TradingOrchestrator:
 
         # 4. Enable symbols (async — scheduled through the executor)
         await self.mt5_conn.enable_all_pairs()
+
+        # 4b. Sweep orphaned visual objects from MT5 charts
+        try:
+            GenesisVisualEngine.cleanup_all_genesis_objects()
+        except Exception as e:
+            logger.warning(f"[WARN] VisualEngine sweep failed: {e}")
 
         # 5. Start main loop
         self._running = True
@@ -328,6 +358,7 @@ class TradingOrchestrator:
             "win_rate": pnl_summary.get("win_rate", 0.0),
             "open_positions": open_positions,
             "regime": regime.value if regime else "unknown",
+            "active_profile": settings.active_profile,
             "paper_trading": settings.paper_trading,
         }
 
@@ -580,50 +611,56 @@ class TradingOrchestrator:
         positions_raw = await self._mt5.submit(mt5.positions_get, magic=settings.magic_number)
         positions = _raw_positions_to_dicts(positions_raw)
 
-        # ── Phase 2: Compute trailing-stop levels (no lock, pure Python)
-        #   Each iteration off-loads mt5 reads to the worker thread pool;
-        #   the asyncio event loop stays free for dashboard / Discord.
-        trail_jobs = []  # list of (ticket, symbol, distance)
-        for pos in positions:
-            atr_data = await self.fetcher.get_analyzed_data(
-                pos["symbol"], settings.entry_timeframe, 50
-            )
-            if atr_data is None or atr_data.empty:
-                continue
-            atr_col = f"atr_{settings.atr_period}"
-            latest_atr = atr_data[atr_col].iloc[-1]
-            distance = latest_atr * settings.atr_sl_multiplier
-            trail_jobs.append((pos["ticket"], pos["symbol"], distance))
+        # Clean up the dynamic trailing manager — remove closed positions
+        # from its internal per-position mode tracking.
+        active_tickets = {p["ticket"] for p in positions}
+        self.dynamic_trailing.cleanup(active_tickets)
 
-        # ── Phase 3: Apply trailing stop SLs via the serialised executor.
-        #   The executor holds a threading.Lock on its own worker thread,
-        #   so there is no asyncio.Lock contention at all.  The ~1 ms
-        #   mt5.order_send is serialised naturally; the event loop is never
-        #   starved waiting for it.
-        for ticket, symbol, distance in trail_jobs:
-            position = await self._mt5.submit(mt5.positions_get, ticket=ticket)
-            if not position:
-                continue
-            pos = position[0]
-            tick = await self._mt5.submit(mt5.symbol_info_tick, pos.symbol)
+        # ── Phase 2: Dynamic Multi‑Stage Trailing ──────────────────────
+        #   Replaces the old single‑distance breach-only trailing (Phase 1.5
+        #   breakeven + Phase 3 simple trailing) with an adaptive mode
+        #   switching engine that escalates through:
+        #
+        #       STATIC → BREAKEVEN → STRUCTURE / ATR_DYNAMIC → ACCELERATED
+        #
+        #   Each position is evaluated independently; the engine fetches M15
+        #   data once per unique symbol and reuses it across all positions
+        #   on that symbol.
+        #
+        #   The engine also handles spread‑aware breakeven logic that
+        #   prevents accidental stop‑outs from the Bid/Ask gap — critical
+        #   for SELL trades where SL triggers on the higher Ask price.
+
+        # Fetch M15 trailing data once per unique symbol
+        m15_cache: dict[str, Any] = {}
+        unique_symbols = {p["symbol"] for p in positions}
+        for sym in unique_symbols:
+            try:
+                m15 = await self.fetcher.get_analyzed_data(sym, "M15", 60)
+                if m15 is not None and not m15.empty:
+                    m15_cache[sym] = m15
+            except Exception as e:
+                logger.debug(f"⚠️ M15 data fetch failed for {sym}: {e}")
+
+        for pos in positions:
+            # Fetch current tick for this position
+            tick = await self._mt5.submit(mt5.symbol_info_tick, pos["symbol"])
             if not tick:
                 continue
 
-            new_sl = None
-            if pos.type == mt5.ORDER_TYPE_BUY:
-                potential = tick.bid - distance
-                if potential > pos.sl and potential > pos.price_open:
-                    new_sl = potential
-            elif pos.type == mt5.ORDER_TYPE_SELL:
-                potential = tick.ask + distance
-                if pos.sl == 0 or (potential < pos.sl and potential < pos.price_open):
-                    new_sl = potential
+            # Get cached M15 data for this symbol
+            m15_data = m15_cache.get(pos["symbol"])
 
-            if new_sl is None:
-                continue
-
-            # This call serialises with all other MT5 work inside the executor.
-            await self.order_manager._apply_trailing_stop(ticket, new_sl, symbol)
+            # Delegate to the dynamic trailing manager
+            try:
+                await self.dynamic_trailing.evaluate_and_trail(
+                    pos, tick, m15_data=m15_data,
+                )
+            except Exception as e:
+                logger.error(
+                    f"⚠️ Dynamic trailing failed for T{pos['ticket']} "
+                    f"({pos['symbol']}): {e}"
+                )
 
         # Scan for new signals (outside the lock — fetching data is read-only,
         # ordering is its own critical section below)
@@ -646,19 +683,37 @@ class TradingOrchestrator:
             # ``asyncio.gather`` still wavefronts the three reads onto the
             # executor's queue, and they execute in arrival order on the
             # serialised worker thread.
-            htf_data, etf_data, current_price = await asyncio.gather(
+
+            # Rule 1 & 2: Also fetch H1 gatekeeper indicators (ADX, EMA50,
+            # ATR, close) — lightweight, no SMC or extra indicator overhead.
+            htf_data, etf_data, current_price, gk = await asyncio.gather(
                 self.fetcher.get_analyzed_data(pair, settings.higher_timeframe, 300),
                 self.fetcher.get_analyzed_data(pair, settings.entry_timeframe, 100),
                 self.fetcher.get_current_price(pair),
+                self.fetcher.get_gatekeeper_indicators(pair),
             )
 
-            await enqueue_tick({
+            tick_data = {
                 "symbol": pair,
                 "timestamp": int(current_price["time"].timestamp()),
                 "bid": current_price["bid"],
                 "ask": current_price["ask"],
+                "spread": current_price.get("spread", round(current_price["ask"] - current_price["bid"], 6)),
                 "volume": current_price.get("volume", 0),
-            })
+            }
+            await enqueue_tick(tick_data)
+
+            # Broadcast tick to WebSocket dashboard clients (high-frequency
+            # path — uses broadcast_json to skip WSEventPayload overhead).
+            if _WS_AVAILABLE:
+                try:
+                    await ws_manager.broadcast_json({
+                        "event_type": "TICK",
+                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                        "data": tick_data,
+                    })
+                except Exception as e:
+                    logger.debug(f"WS broadcast (tick) failed: {e}")
 
             if htf_data is None or etf_data is None or current_price is None:
                 logger.warning(f"[WARN] {pair}: No data returned (HTF={htf_data is not None}, ETF={etf_data is not None}, price={current_price is not None})")
@@ -689,6 +744,46 @@ class TradingOrchestrator:
                     f"No signal this cycle"
                 )
                 continue
+
+            # ── Rule 1: Gatekeeper Trend Guard ────────────────────────
+            # Blocks SELL signals during a strong H1 uptrend (ADX > 25 AND
+            # Price > 50 EMA).  Only applies to SELL signals.
+            if not self.strategy_selector.check_gatekeeper(
+                pair,
+                gk,
+                signal.direction,
+            ):
+                continue
+
+            # ── Rule 3: M15 Sniper Confirmation ──────────────────────
+            # Requires the latest M15 candle to confirm the intended direction
+            # via lower-high/bearish-close (SELL) or higher-low/bullish-close (BUY).
+            if not self.strategy_selector.check_sniper_confirmation(
+                etf_data,
+                signal.direction,
+            ):
+                continue
+
+            # ── Rule 2: Minimum SL Floor ───────────────────────────────
+            # If the raw stop-loss distance is smaller than 1.0× H1 ATR, bump
+            # it up so the trade has proper breathing room against standard
+            # market noise.  This prevents the tiny-SL problem where normal
+            # intra-hour wiggles wipe out the position before the move begins.
+            h1_atr = gk.get("atr") if gk else None
+            if h1_atr is not None and h1_atr > 0:
+                    min_sl_distance = h1_atr * settings.min_sl_h1_atr_mult
+                    current_sl_dist = abs(signal.entry_price - signal.stop_loss)
+                    if current_sl_dist < min_sl_distance:
+                        old_sl = signal.stop_loss
+                        if signal.direction == TradeDirection.BUY:
+                            signal.stop_loss = signal.entry_price - min_sl_distance
+                        else:
+                            signal.stop_loss = signal.entry_price + min_sl_distance
+                        logger.info(
+                            f"📏 SL FLOOR bumped {pair}: {old_sl:.5f} → "
+                            f"{signal.stop_loss:.5f} (raw dist {current_sl_dist:.5f} < "
+                            f"H1 ATR {h1_atr:.5f} × {settings.min_sl_h1_atr_mult:.1f})"
+                        )
 
             # ── Trade execution critical section ─────────────────────────
             # Only `_emergency_lock` prevents `close_all_trades` from racing
@@ -767,6 +862,94 @@ class TradingOrchestrator:
                 "reason": signal.reason,
             })
 
+            # Broadcast trade opened to WebSocket dashboard clients
+            if _WS_AVAILABLE:
+                try:
+                    await ws_manager.broadcast(
+                        WSEventPayload(
+                            event_type="TRADE_OPEN",
+                            timestamp=datetime.now(timezone.utc).isoformat(),
+                            data={
+                                "ticket": trade_result["ticket"],
+                                "symbol": signal.symbol,
+                                "direction": signal.direction.value,
+                                "volume": lots,
+                                "entry_price": trade_result["price"],
+                                "sl": signal.stop_loss,
+                                "tp": signal.take_profit,
+                                "strategy": signal.strategy_name,
+                            },
+                        )
+                    )
+                except Exception as e:
+                    logger.debug(f"WS broadcast (trade_open) failed: {e}")
+
+            # Draw initial chart visuals for the newly opened position
+            # Pass H1 ATR from gatekeeper indicators (already fetched) so the
+            # HUD shows a meaningful volatility value instead of 0.0.
+            try:
+                GenesisVisualEngine.update_trade_visuals(
+                    symbol=signal.symbol,
+                    ticket=trade_result["ticket"],
+                    position_type=signal.direction.value,
+                    entry_price=trade_result["price"],
+                    current_sl=signal.stop_loss,
+                    target_tp=signal.take_profit,
+                    current_mode="STATIC",
+                    atr_value=h1_atr or 0.0,
+                )
+            except Exception as e:
+                logger.debug(f"VisualEngine: initial draw failed T{trade_result['ticket']}: {e}")
+
+
+    def _extract_exit_info(
+        self,
+        deals,
+        default_exit: float = 0.0,
+    ) -> tuple:
+        """Extract exit price, profit, swap, and comment from MT5 deal history.
+
+        Filters strictly by ``DEAL_ENTRY_OUT`` so that entry deals from other
+        positions sharing the same time window cannot overwrite the real exit
+        price — the root cause of the cross-market price contamination bug
+        (e.g. GBPJPY exit prices appearing on USDCAD / AUDUSD rows).
+
+        Args:
+            deals: Iterable of MT5 deal objects returned by
+                ``mt5.history_deals_get(position=ticket)``.
+            default_exit: Fallback price if no OUT deal is found (typically
+                the trade's entry price so the row doesn't show 0.0).
+
+        Returns:
+            Tuple of (exit_price, profit, swap, close_comment).
+        """
+        exit_price = default_exit
+        profit = 0.0
+        swap = 0.0
+        close_comment = "Closed"
+
+        if not deals:
+            return exit_price, profit, swap, close_comment
+
+        for deal in deals:
+            # Only process the closing (exit) leg — skip entry deals entirely
+            # to avoid inheriting prices from unrelated position entries.
+            if getattr(deal, "entry", None) == mt5.DEAL_ENTRY_OUT:
+                exit_price = deal.price
+                profit += deal.profit
+                swap += deal.swap
+                # Include broker commission so the dashboard profit matches
+                # the MT5 account statement down to the cent. In MT5,
+                # ``deal.profit`` may NOT include the commission — it's a
+                # separate field on the same deal object. Adding it ensures
+                # the net P&L is accurate even on ECN accounts where
+                # commissions are charged per-lot ($7/lot → $133 on 19 lots).
+                commission = getattr(deal, "commission", 0.0) or 0.0
+                profit += commission
+                if deal.comment:
+                    close_comment = deal.comment
+
+        return exit_price, profit, swap, close_comment
 
     async def _check_closed_positions(self):
         """Compares open positions in MT5 against open positions in DB to log closes.
@@ -797,7 +980,11 @@ class TradingOrchestrator:
 
             logger.info(f"🔔 Detected closed position: Ticket {trade.ticket}")
 
-            # Fetch MT5 history deals for this ticket
+            # Fetch MT5 history deals for this specific position ticket.
+            # The ``position=trade.ticket`` kwarg tells MT5 to pre-filter deals
+            # to those belonging to this position — we then apply an additional
+            # DEAL_ENTRY_OUT guard inside _extract_exit_info so no unrelated
+            # entry deals from concurrent positions can leak in.
             history_from = datetime.now() - timedelta(days=2)
             history_to = datetime.now() + timedelta(days=1)
 
@@ -808,18 +995,23 @@ class TradingOrchestrator:
                 position=trade.ticket
             )
 
-            exit_price = trade.entry_price
-            profit = 0.0
-            swap = 0.0
-            close_comment = "Closed"
+            # Extract exit price using DEAL_ENTRY_OUT filter to prevent
+            # cross-market price contamination (Fix #1).
+            exit_price, profit, swap, close_comment = self._extract_exit_info(deals, default_exit=trade.entry_price)
 
-            if deals:
-                for deal in deals:
-                    if deal.entry == mt5.DEAL_ENTRY_OUT:
-                        exit_price = deal.price
-                        profit += deal.profit
-                        swap += deal.swap
-                        close_comment = deal.comment or "Closed in MT5"
+            # ── P&L consistency check ────────────────────────────────
+            # Check if the profit MT5 reports differs from what's stored
+            # in the database. A mismatch means the DB has stale / corrupted
+            # data and should be investigated.
+            old_db_profit = round(getattr(trade, "profit", 0.0) or 0.0, 2)
+            mt5_profit = round(profit, 2)
+            if abs(old_db_profit - mt5_profit) > PNL_TOLERANCE:
+                logger.warning(
+                    f"⚠️ PNL_MISMATCH Ticket {trade.ticket} ({trade.symbol}): "
+                    f"DB profit=${old_db_profit:.2f} ≠ MT5 profit=${mt5_profit:.2f} "
+                    f"(diff=${mt5_profit - old_db_profit:+.2f}). "
+                    f"DB data is stale — will overwrite with MT5 value."
+                )
 
             # Update Database
             updated_trade = await self.db.record_trade_close(
@@ -839,6 +1031,14 @@ class TradingOrchestrator:
                 # Update RiskManager streak
                 self.risk_manager.record_trade_result(profit)
 
+                # Clean up MT5 chart visuals for this closed trade
+                try:
+                    GenesisVisualEngine.cleanup_trade_objects(
+                        symbol=trade.symbol, ticket=trade.ticket,
+                    )
+                except Exception as e:
+                    logger.debug(f"VisualEngine: cleanup failed T{trade.ticket}: {e}")
+
                 closed_trades.append((trade, exit_price, profit, swap, close_comment))
 
         # Outside the lock — Discord notify (network IO, no MT5 access)
@@ -853,6 +1053,27 @@ class TradingOrchestrator:
                 "profit": profit,
                 "comment": comment,
             })
+
+            # Broadcast trade closed to WebSocket dashboard clients
+            if _WS_AVAILABLE:
+                try:
+                    await ws_manager.broadcast(
+                        WSEventPayload(
+                            event_type="TRADE_CLOSE",
+                            timestamp=datetime.now(timezone.utc).isoformat(),
+                            data={
+                                "ticket": trade.ticket,
+                                "symbol": trade.symbol,
+                                "direction": trade.direction,
+                                "volume": trade.volume,
+                                "entry_price": trade.entry_price,
+                                "exit_price": exit_price,
+                                "profit": profit,
+                            },
+                        )
+                    )
+                except Exception as e:
+                    logger.debug(f"WS broadcast (trade_close) failed: {e}")
 
     async def close_all_trades(self) -> List[dict]:
         """Emergency method to close all OUR trades (magic-filtered).
@@ -929,18 +1150,27 @@ class TradingOrchestrator:
                 position=trade.ticket,
             )
 
-            exit_price = trade.entry_price
-            profit = 0.0
-            swap = 0.0
-            close_comment = "Closed offline"
+            # Reuse the same DEAL_ENTRY_OUT-filtered helper for consistency
+            # with _check_closed_positions — prevents price contamination on
+            # startup sync too.
+            exit_price, profit, swap, close_comment = self._extract_exit_info(
+                deals, default_exit=trade.entry_price
+            )
 
-            if deals:
-                for deal in deals:
-                    if deal.entry == mt5.DEAL_ENTRY_OUT:
-                        exit_price = deal.price
-                        profit += deal.profit
-                        swap += deal.swap
-                        close_comment = deal.comment or "Closed offline"
+            # ── P&L consistency check (startup sync) ──────────────────
+            old_db_profit = round(getattr(trade, "profit", 0.0) or 0.0, 2)
+            mt5_profit = round(profit, 2)
+            if abs(old_db_profit - mt5_profit) > PNL_TOLERANCE:
+                logger.warning(
+                    f"⚠️ PNL_MISMATCH (startup) Ticket {trade.ticket} "
+                    f"({trade.symbol}): DB profit=${old_db_profit:.2f} ≠ "
+                    f"MT5 profit=${mt5_profit:.2f} "
+                    f"(diff=${mt5_profit - old_db_profit:+.2f}). "
+                    f"DB data is stale — will overwrite with MT5 value."
+                )
+
+            if close_comment == "Closed":
+                close_comment = "Closed offline"
 
             missing_closes.append(
                 (trade.ticket, exit_price, profit, swap, close_comment)

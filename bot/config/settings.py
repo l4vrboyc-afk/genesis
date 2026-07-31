@@ -31,13 +31,15 @@ class BotSettings(BaseSettings):
     """Main bot configuration — loaded from .env file."""
     
     # ── Profile ─────────────────────────────────────────────────────
-    active_profile: str = Field(default="default", description="Active trading profile (e.g. default, scalper, breakout)")
+    active_profile: str = Field(default="default", description="Active trading profile (e.g. default, scalper, breakout, daytrader)")
 
 
     # ── MT5 Connection ──────────────────────────────────────────────
-    mt5_login: int = Field(default=0, description="MT5 account number")
-    mt5_password: str = Field(default="", description="MT5 account password")
-    mt5_server: str = Field(default="Exness-MT5Trial7", description="MT5 broker server name")
+    mt5_login: int = Field(default=0, description="MT5 account number (single locked account — MetaQuotes-Demo)")
+    mt5_password: str = Field(default="", description="MT5 account password (leave blank to attach to active open terminal)")
+    # Single locked account — always targets MetaQuotes-Demo.
+    # Profile .env files inherit these credentials from the base .env.
+    mt5_server: str = Field(default="MetaQuotes-Demo", description="MT5 broker server name (locked to MetaQuotes-Demo)")
     mt5_path: str = Field(
         default_factory=lambda: (
             r"C:\Program Files\MetaTrader 5\terminal64.exe"
@@ -105,11 +107,81 @@ class BotSettings(BaseSettings):
     higher_timeframe: str = Field(default="H4", description="Higher timeframe for trend analysis")
     entry_timeframe: str = Field(default="M15", description="Lower timeframe for trade entries")
 
+    # ── Rule 1: Gatekeeper Trend Guard (H1 ADX/EMA) ─────────────────
+    # Reference: ADX > 25 AND Price > 50 EMA → strong uptrend → block SELLs
+    gatekeeper_timeframe: str = Field(
+        default="H1",
+        description="Timeframe for the gatekeeper trend guard (default H1)",
+    )
+    gatekeeper_adx_threshold: float = Field(
+        default=25.0,
+        description="ADX threshold for gatekeeper: block SELLs when ADX exceeds this AND price > 50 EMA",
+    )
+    gatekeeper_ema_period: int = Field(
+        default=50,
+        description="EMA period for gatekeeper trend guard (default 50)",
+    )
+
+    # ── Rule 2: Minimum SL Floor via H1 ATR ────────────────────────
+    # Enforce a minimum stop-loss distance using H1 ATR, so small calculated
+    # stops get bumped up to at least 1.0× H1 ATR (gives trades breathing room
+    # against normal market noise).
+    min_sl_h1_atr_mult: float = Field(
+        default=1.0,
+        description="ATR multiplier for minimum SL floor; SL distance < 1.0× H1 ATR is bumped up",
+    )
+
+    # ── Rule 3: M15 Sniper Confirmation ────────────────────────────
+    # Before entry, require the M15 candle pattern to confirm momentum:
+    #   SELL: lower high + bearish close.  BUY: higher low + bullish close.
+    sniper_confirmation_enabled: bool = Field(
+        default=True,
+        description="Enable M15 candle-pattern confirmation (lower-high bearish-close for SELL, etc.)",
+    )
+
+    # ── Rule 4: Spread-Aware Breakeven Logic ───────────────────────
+    # Once price has moved at least N×ATR in our favour, move SL to breakeven
+    # with a spread buffer to prevent accidental stop-outs from the Bid/Ask gap.
+    breakeven_enabled: bool = Field(
+        default=True,
+        description="Enable auto-breakeven once price moves N×ATR in profit",
+    )
+    breakeven_activation_atr: float = Field(
+        default=1.0,
+        description="ATR multiplier: profit must reach this before breakeven is applied",
+    )
+    breakeven_spread_buffer_mult: float = Field(
+        default=2.0,
+        description="Spread buffer multiplier for breakeven SL: SL = entry ∓ (spread × this)",
+    )
+    breakeven_progressive_buffer_min: float = Field(
+        default=0.5,
+        description=(
+            "Minimum spread buffer multiplier when price is deep in profit. "
+            "The buffer scales from breakeven_spread_buffer_mult down to this value "
+            "as profit goes from the activation threshold to 3× the activation "
+            "threshold. E.g. with activation=1.0×ATR and default values: "
+            "1.0×ATR → buffer=2.0×spread, 2.0×ATR → buffer=1.25×spread, "
+            "3.0×ATR+ → buffer=0.5×spread"
+        ),
+    )
+
     # ── News Filter ─────────────────────────────────────────────────
     news_filter_enabled: bool = Field(default=True, description="Enable economic calendar news filter")
     news_buffer_minutes_before: int = Field(default=30, description="No-trade window before news (minutes)")
     news_buffer_minutes_after: int = Field(default=30, description="No-trade window after news (minutes)")
     news_calendar_refresh_interval: int = Field(default=3600, description="Calendar refresh interval (seconds)")
+
+    # ── Trailing Stop Activation ───────────────────────────────────
+    # Fix #15: ATR multiplier that must be reached in profit before trailing
+    # starts. 0 = immediate trailing (current behaviour), 1.0 = trail only
+    # after price has moved 1× ATR in the profit direction (reduces noise-
+    # tightening on M1 timeframes). Configurable via TRAIL_ACTIVATION_ATR
+    # in .env.<profile>.
+    trail_activation_atr: float = Field(
+        default=0.0,
+        description="ATR multiplier: profit must reach this before trailing activates (0 = immediate)",
+    )
 
     # ── Track (d) — Real-Money Safety Hysteresis ──────────────────────
     # Sticky regime window: once classified, the regime is held for this many
@@ -193,17 +265,156 @@ TIMEFRAME_MAP = {
 }
 
 
-# Singleton settings instance
-env_file = ".env"
+# ── Singleton settings ──────────────────────────────────────────────────────
+# MT5 credentials are ALWAYS sourced from the base .env via configparser,
+# then injected into the pydantic Settings object.  Profile .env files are
+# read ONLY for strategy overrides — any MT5_ keys in them are silently
+# discarded so a profile swap can never accidentally change accounts.
+#
+# If base .env is missing, raise a clear error rather than silently
+# connecting to a random/demo account.
+
+import re  # noqa: E402
+
+_KV_RE = re.compile(r'^([A-Za-z_][A-Za-z0-9_]*)')
+
+
+def _parse_env_file(path: str) -> dict:
+    """Parse a KEY=VALUE .env file (no section headers). Strips comments/blank lines.
+    Preserves original key case (base .env uses UPPERCASE, snake_case fields injected below)."""
+    result = {}
+    with open(path, encoding="utf-8") as fh:
+        for raw_line in fh:
+            line = raw_line.strip()
+            if not line or line.startswith("#"):
+                continue
+            if "=" not in line:
+                continue
+            key, _, value = line.partition("=")
+            key = key.strip()
+            # skip lines that don't look like KEY=VALUE
+            if not _KV_RE.match(key):
+                continue
+            # strip inline comments (unquoted trailing #)
+            val = value.strip()
+            if not val.startswith(("'", '"')):
+                comment_idx = val.find("#")
+                if comment_idx >= 0:
+                    val = val[:comment_idx].strip()
+            result[key] = val
+    return result
+
+
+def _require_base_env() -> dict:
+    """Load MT5 credentials from base .env; raise if .env is missing or incomplete."""
+    env_path = ".env"
+    if not os.path.exists(env_path):
+        raise FileNotFoundError(
+            "Genesis requires a .env file for MT5 credentials. "
+            "Copy .env.example → .env and fill in MT5_LOGIN / MT5_PASSWORD / MT5_SERVER."
+        )
+    parsed = _parse_env_file(env_path)
+    lower = {k.lower(): v for k, v in parsed.items()}
+    missing = [k for k in ("mt5_login", "mt5_password", "mt5_server") if not lower.get(k)]
+    if missing:
+        raise ValueError(
+            f"Base .env is missing required MT5 credentials: {missing}. "
+            "Genesis is locked to a single account — credentials must be set in .env."
+        )
+    return {
+        "mt5_login": int(lower["mt5_login"]),
+        "mt5_password": lower["mt5_password"],
+        "mt5_server": lower["mt5_server"],
+        "mt5_path": lower.get("mt5_path", ""),
+    }
+
+
+# ── Build settings ─────────────────────────────────────────────────────────
+# All values are assembled into one dict then passed to BotSettings(**…) so
+# pydantic validates every field in one shot. No setattr after construction.
+
+# ┌─ Singleton settings ────────────────────────────────────────────────────────────────
+# All values are parsed from .env files into ONE dict, then passed to
+# BotSettings(**final_dict) so pydantic validates every field in a single
+# pass. No setattr after construction. No nested re-reads.
+#
+# MT5 credentials are ALWAYS locked to base .env (lines 375-388 override
+# anything a profile file may have placed in _final).
+
 profile = os.getenv("GENESIS_PROFILE")
-if profile:
-    env_file = f".env.{profile.lower()}"
 
-# Fallback to .env if the profile-specific file doesn't exist
-if profile and not os.path.exists(env_file):
-    env_file = ".env"
+# --- Step 1: Load base .env and build the canonical dict ---
+_base_parsed = _parse_env_file(".env")
 
-settings = BotSettings(_env_file=env_file)
-# Overwrite active_profile with the env var if it exists so the app knows its identity
+def _base_key(key: str):
+    """Resolve a key from base .env, trying UPPERCASE first, then lowercase."""
+    return _base_parsed.get(key.upper()) or _base_parsed.get(key.lower()) or ""
+
+_final = {}
+
+# Core MT5 credentials — single source of truth
+_mt5_built = {
+    "mt5_login":    int(_base_key("mt5_login") or "0"),
+    "mt5_password": _base_key("mt5_password"),
+    "mt5_server":   _base_key("mt5_server") or "MetaQuotes-Demo",
+    "mt5_path":     _base_key("mt5_path"),
+}
+
+# Profile meta
+_active_profile = (profile or _base_key("active_profile") or "default").lower()
+
+# All other base keys → snake_case lower → _final
+_JF = {"trading_pairs"}  # JSON fields
+
+for key, val in _base_parsed.items():
+    snake = key.strip().lower()
+    if snake in _mt5_built:
+        continue  # MT5 handled separately above
+    if snake == "active_profile":
+        continue  # handled below
+    # Coerce JSON-list fields
+    if snake in _JF:
+        import json as _jn
+        try:
+            val_coerced = _jn.loads(val)
+        except Exception:
+            val_coerced = [s.strip().strip('"') for s in val.strip("[]").split(",") if s.strip()]
+    else:
+        val_coerced = val
+    _final[snake] = val_coerced
+
+# Inject MT5 (guarantees correct source of truth)
+for k, v in _mt5_built.items():
+    _final[k] = v
+
+# Set profile
+_final["active_profile"] = _active_profile
+
+# --- Step 2: Profile overrides (strategy-only, MT5 keys stripped) ---
 if profile:
-    settings.active_profile = profile.lower()
+    profile_file = f".env.{profile.lower()}"
+    if os.path.exists(profile_file):
+        parsed_pf = _parse_env_file(profile_file)
+        _mt5_ban = {"mt5_login","mt5_password","mt5_server","mt5_path",
+                     "MT5_LOGIN","MT5_PASSWORD","MT5_SERVER","MT5_PATH"}
+        for key, val in parsed_pf.items():
+            if key in _mt5_ban or key.upper() in _mt5_ban:
+                continue
+            snake = key.strip().lower()
+            if snake in _JF:
+                import json as _jn
+                try:
+                    val_coerced = _jn.loads(val)
+                except Exception:
+                    val_coerced = [s.strip().strip('"') for s in val.strip("[]").split(",") if s.strip()]
+            else:
+                val_coerced = val
+            _final[snake] = val_coerced
+
+# --- Step 3: Construct pydantic settings (single pass, validated) ---
+settings = BotSettings(**_final)
+
+# --- Step 4: Post-construction adjustments ---
+# Scalper uses M15 gatekeeper (faster short-term pullback filter than H1).
+if settings.active_profile == "scalper":
+    settings.gatekeeper_timeframe = "M15"
