@@ -10,8 +10,12 @@ output into the repo's three bundle copies (see docs/LAUNCHER.md
     3. ``Genesis/`` subfolder       — self-contained deployment copy
 
 After syncing, the script verifies every deployed ``_internal`` tree is
-recursively identical to the build output, and that the picker HTML
-matches ``gui/profile_picker.html``.
+recursively identical to the build output, that the picker HTML matches
+``gui/profile_picker.html``, and — because the bundle ships only the
+launcher GUI — that the source ``dashboard/frontend`` the packaged launcher
+serves live at runtime is present and intact (entry files exist, every
+local asset referenced by ``index.html`` resolves, and ``app.js`` passes
+the ``check_js.py`` delimiter validator).
 
 Usage
 -----
@@ -29,6 +33,7 @@ from __future__ import annotations
 
 import argparse
 import filecmp
+import re
 import shutil
 import subprocess
 import sys
@@ -67,6 +72,135 @@ DEPLOYS = [
     (ROOT / "Genesis.exe", ROOT / "_internal"),
     (ROOT / "Genesis" / "Genesis.exe", ROOT / "Genesis" / "_internal"),
 ]
+
+# The dashboard frontend is NOT bundled into the exe — launch_gui.py spawns
+# ``venv_python main.py`` from the project root, and dashboard/backend/main.py
+# mounts this source directory as the static root.  The build must therefore
+# fail loudly if that source frontend is missing or broken, otherwise a
+# "successful" rebuild ships a launcher whose dashboard serves blank/broken
+# pages.
+FRONTEND_SRC = ROOT / "dashboard" / "frontend"
+FRONTEND_ENTRY_FILES = ("index.html", "styles.css", "app.js")
+CHECK_JS = ROOT / "check_js.py"
+
+
+# ── Source-frontend verification helpers ──────────────────────────
+
+def _local_asset_refs(html_text: str) -> list[str]:
+    """Return the local (non-external) ``src``/``href`` paths in an HTML doc.
+
+    Skips CDN links, protocol-relative URLs, data:/mailto:/tel: URIs and
+    in-page anchors (``#...``) — those are never served from the frontend
+    directory.  Also strips any ``?query``/``#fragment`` suffix so the bare
+    file path can be checked on disk.
+    """
+    refs: list[str] = []
+    for m in re.finditer(
+        r"""(?:src|href)\s*=\s*["']([^"']+)["']""", html_text, re.IGNORECASE
+    ):
+        raw = m.group(1).strip()
+        low = raw.lower()
+        if (
+            raw.startswith("#")
+            or low.startswith(
+                ("http://", "https://", "//", "data:", "mailto:", "tel:", "javascript:")
+            )
+        ):
+            continue
+        path = raw.split("?", 1)[0].split("#", 1)[0]
+        if path and path not in refs:
+            refs.append(path)
+    return refs
+
+
+def verify_frontend() -> int:
+    """Verify the source frontend the packaged launcher serves at runtime.
+
+    The bundle contains only the launcher GUI; the bot and its FastAPI
+    dashboard always run from the source tree (``venv_python main.py``), so
+    ``dashboard/frontend`` must be present and internally consistent.  Checks:
+
+    1. The three entry files (index.html / styles.css / app.js) exist.
+    2. Every local ``src``/``href`` referenced by index.html resolves to a
+       real file inside the frontend directory (catches broken vendor paths
+       like a missing chart.js vendored copy).
+    3. ``app.js`` passes ``check_js.py`` (delimiter balance) — a syntax-broken
+       JS file would render a dead dashboard despite a green build.
+
+    Returns 0 on success, 1 on any failure.
+    """
+    ok = True
+
+    if not FRONTEND_SRC.is_dir():
+        print(red(f"❌ Source frontend missing: {FRONTEND_SRC}"))
+        return 1
+
+    # 1. Entry files present
+    for name in FRONTEND_ENTRY_FILES:
+        if (FRONTEND_SRC / name).is_file():
+            print(green(f"✅ frontend entry {name}"))
+        else:
+            ok = False
+            print(red(f"❌ Frontend entry missing: {name}"))
+
+    # 2. index.html asset references resolve locally
+    idx = FRONTEND_SRC / "index.html"
+    if idx.is_file():
+        try:
+            html = idx.read_text(encoding="utf-8", errors="replace")
+        except OSError as exc:
+            ok = False
+            print(red(f"❌ Cannot read index.html: {exc}"))
+            html = ""
+        for ref in _local_asset_refs(html):
+            # Normalise backslashes and strip any leading slash so the path
+            # resolves relative to the frontend root (StaticFiles serves it
+            # from the same directory).
+            rel = ref.replace("\\", "/").lstrip("/")
+            if (FRONTEND_SRC / rel).is_file():
+                print(green(f"✅ asset {ref}"))
+            else:
+                ok = False
+                print(red(f"❌ index.html references missing asset: {ref}"))
+
+    # 3. app.js passes the delimiter validator
+    if CHECK_JS is not None and CHECK_JS.is_file():
+        try:
+            cp = subprocess.run(
+                [sys.executable, str(CHECK_JS)],
+                cwd=str(ROOT),
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                timeout=60,
+            )
+        except Exception as exc:
+            ok = False
+            print(red(f"❌ check_js.py could not run: {exc}"))
+        else:
+            if cp.returncode == 0:
+                print(green("✅ app.js delimiter balance (check_js.py)"))
+            else:
+                ok = False
+                print(red(f"❌ app.js failed check_js.py:\n{(cp.stdout or '').strip()}"))
+
+    # 4. No shadow frontend copy inside the bundle trees — the packaged
+    #    launcher never serves from there, so a stale copy would only confuse.
+    for _, internal_dst in DEPLOYS:
+        shadow = internal_dst / "dashboard"
+        if shadow.exists():
+            print(
+                yellow(
+                    f"⚠️  Stale dashboard/ inside {internal_dst} is not served by the "
+                    "packaged launcher (it always uses the source frontend). Remove it."
+                )
+            )
+
+    if not ok:
+        print(red("❌ Frontend verification failed."))
+        return 1
+    print(green("✅ Source frontend verified (served live by the packaged launcher)."))
+    return 0
 
 
 # ── Helpers ───────────────────────────────────────────────────────
@@ -209,6 +343,13 @@ def verify() -> int:
         print(red("❌ Verification failed."))
         return 1
     print(green("✅ All deployed copies are identical to the build output."))
+
+    # The bundle ships only the launcher GUI — the bot/dashboard always run
+    # from the source tree, so verify the frontend the packaged launcher will
+    # actually serve is present and internally consistent.
+    if verify_frontend() != 0:
+        print(red("❌ Verification failed (source frontend)."))
+        return 1
     return 0
 
 
