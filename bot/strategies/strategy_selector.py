@@ -126,6 +126,29 @@ class StrategySelector:
             return self.strategies[self._current_regime]
         return None
 
+    @staticmethod
+    def _classify_regime(adx: float, atr_ratio: float) -> MarketRegime:
+        """Stateless ADX / ATR-ratio regime classification.
+
+        Shared by ``detect_regime`` (stateful wrapper with hysteresis) and
+        ``evaluate_symbol_gates`` (read-only dashboard evaluator) so the
+        classification thresholds can never drift apart.
+        """
+        # High volatility spike — reduce exposure
+        if atr_ratio > settings.atr_volatility_spike:
+            return MarketRegime.VOLATILE
+        # Strong trend
+        if adx > settings.adx_trend_threshold:
+            return MarketRegime.TRENDING
+        # Ranging / sideways
+        if adx < settings.adx_range_threshold:
+            return MarketRegime.RANGING
+        # Low volatility / dead market
+        if atr_ratio < 0.5:
+            return MarketRegime.DEAD
+        # In-between — default to ranging (safer)
+        return MarketRegime.RANGING
+
     def detect_regime(self, htf_data: pd.DataFrame) -> MarketRegime:
         """
         Detect current market regime from higher timeframe data.
@@ -151,22 +174,9 @@ class StrategySelector:
             atr_ratio = 1.0
 
         # ── Classification Logic ───────────────────────────────────
-
-        # High volatility spike — reduce exposure
-        if atr_ratio > settings.atr_volatility_spike:
-            regime = MarketRegime.VOLATILE
-        # Strong trend
-        elif adx > settings.adx_trend_threshold:
-            regime = MarketRegime.TRENDING
-        # Ranging / sideways
-        elif adx < settings.adx_range_threshold:
-            regime = MarketRegime.RANGING
-        # Low volatility / dead market
-        elif atr_ratio < 0.5:
-            regime = MarketRegime.DEAD
-        else:
-            # In-between — default to ranging (safer)
-            regime = MarketRegime.RANGING
+        # Stateless shared classifier — the dashboard evaluator uses the
+        # exact same thresholds (see ``_classify_regime``).
+        regime = self._classify_regime(adx, atr_ratio)
 
         # ── Hysteresis (Track d) ───────────────────────────────────
         # The current regime is sticky inside ``hysteresis_window_seconds``.
@@ -561,6 +571,187 @@ class StrategySelector:
         passed = sum(1 for g in gates if g["passed"])
         allowed = passed >= 4
         return {"passed": passed, "total": 5, "gates": gates, "allowed": allowed}
+
+    def evaluate_symbol_gates(
+        self,
+        symbol: str,
+        gatekeeper_data: Optional[dict],
+        entry_tf_data: Optional[pd.DataFrame],
+        htf_data: Optional[pd.DataFrame],
+    ) -> dict:
+        """Evaluate the five dashboard gateway pills for a *symbol* from
+        live MT5 data — no trade signal / direction required.
+
+        This is the backend behind the dashboard's header gateway matrix
+        (EMA / ADX / RSI / VOL / REG).  It is deliberately **stateless**:
+        unlike ``detect_regime`` it never mutates hysteresis state, fires
+        notifications, or broadcasts WebSocket events, so it is safe to
+        call from a read-only HTTP route on every dropdown symbol change.
+
+        Pill order matches the dashboard header IDs:
+            [gate-ema, gate-adx, gate-rsi, gate-vol, gate-reg]
+
+        Gates (each fail-open → ``True`` when its data is unavailable,
+        matching the conventions of ``evaluate_gates``):
+            1. EMA  — price stacked with EMA50 + EMA200 (bull or bear stack)
+            2. ADX  — ADX >= 20 (trend has conviction)
+            3. RSI  — entry-TF RSI inside [rsi_oversold, rsi_overbought]
+            4. VOL  — latest bar volume >= volume_surge_ratio × 20-bar avg
+            5. REG  — stateless regime classification != DEAD
+
+        Args:
+            symbol: Trading pair.
+            gatekeeper_data: Dict from ``DataFetcher.get_gatekeeper_indicators``
+                with keys ``adx``, ``ema_50``, ``atr``, ``close``.
+            entry_tf_data: Analyzed entry-timeframe DataFrame (RSI, volume).
+            htf_data: Analyzed higher-timeframe DataFrame (ema_200, adx, atr_ratio).
+
+        Returns:
+            Dict with ``gates`` (list of 5 booleans in pill order),
+            ``passed``, ``total``, ``overall`` and ``details``.
+        """
+        gates = []
+
+        # ── Gate 1: EMA Trend Alignment (stacked with EMA50 + EMA200) ──
+        ema_pass = True  # fail-open
+        close = gatekeeper_data.get("close") if gatekeeper_data else None
+        ema_50 = gatekeeper_data.get("ema_50") if gatekeeper_data else None
+        ema_200 = None
+        if htf_data is not None and not htf_data.empty and "ema_200" in htf_data.columns:
+            ema_200 = htf_data["ema_200"].iloc[-1]
+        if (
+            close is not None and ema_50 is not None
+            and not pd.isna(close) and not pd.isna(ema_50)
+        ):
+            if ema_200 is not None and not pd.isna(ema_200):
+                stacked_bull = close > ema_50 > ema_200
+                stacked_bear = close < ema_50 < ema_200
+                ema_pass = stacked_bull or stacked_bear
+            else:
+                # No EMA200 available — require a meaningful ATR-relative
+                # separation from EMA50 instead of a tautology that always
+                # passes (close > ema_50 or close < ema_50).
+                atr = gatekeeper_data.get("atr") if gatekeeper_data else None
+                if atr is not None and not pd.isna(atr) and float(atr) > 0:
+                    ema_pass = abs(float(close) - float(ema_50)) > 0.1 * float(atr)
+                else:
+                    ema_pass = True  # fail-open
+        gates.append({"name": "ema", "passed": bool(ema_pass)})
+
+        # ── Gate 2: ADX Volatility Gate (ADX >= 20 = conviction) ────────
+        adx_pass = True  # fail-open
+        adx_val = gatekeeper_data.get("adx") if gatekeeper_data else None
+        if (
+            (adx_val is None or pd.isna(adx_val))
+            and htf_data is not None and not htf_data.empty
+            and "adx" in htf_data.columns
+        ):
+            adx_val = htf_data["adx"].iloc[-1]
+        if adx_val is not None and not pd.isna(adx_val):
+            adx_pass = float(adx_val) >= 20.0
+        gates.append({"name": "adx", "passed": bool(adx_pass)})
+
+        # ── Gate 3: RSI Momentum (not overbought / oversold) ────────────
+        rsi_pass = True  # fail-open
+        if entry_tf_data is not None and not entry_tf_data.empty:
+            rsi_col = f"rsi_{settings.rsi_period}"
+            if rsi_col in entry_tf_data.columns:
+                rsi_val = entry_tf_data[rsi_col].iloc[-1]
+                if not pd.isna(rsi_val):
+                    rsi_pass = settings.rsi_oversold <= float(rsi_val) <= settings.rsi_overbought
+        gates.append({"name": "rsi", "passed": bool(rsi_pass)})
+
+        # ── Gate 4: Volume Surge (latest bar >= ratio × 20-bar avg) ─────
+        vol_pass = True  # fail-open
+        if entry_tf_data is not None and not entry_tf_data.empty:
+            vol_col = "tick_volume" if "tick_volume" in entry_tf_data.columns else "volume"
+            if vol_col in entry_tf_data.columns:
+                latest_vol = entry_tf_data[vol_col].iloc[-1]
+                vol_avg = entry_tf_data[vol_col].tail(20).mean()
+                if vol_avg > 0 and not pd.isna(latest_vol):
+                    vol_pass = latest_vol >= (settings.volume_surge_ratio * vol_avg)
+        gates.append({"name": "volume", "passed": bool(vol_pass)})
+
+        # ── Gate 5: Market Regime Gate (stateless — not DEAD) ───────────
+        reg_pass = True  # fail-open
+        if htf_data is not None and not htf_data.empty:
+            latest = htf_data.iloc[-1]
+            adx = latest.get("adx", 0)
+            atr_ratio = latest.get("atr_ratio", 1.0)
+            if pd.isna(adx):
+                adx = 0
+            if pd.isna(atr_ratio):
+                atr_ratio = 1.0
+            regime = self._classify_regime(adx, atr_ratio)
+            reg_pass = regime != MarketRegime.DEAD
+        gates.append({"name": "regime", "passed": bool(reg_pass)})
+
+        passed = sum(1 for g in gates if g["passed"])
+        return {
+            "gates": [g["passed"] for g in gates],
+            "passed": passed,
+            "total": 5,
+            "overall": (
+                f"{passed}/5 OPTIMAL" if passed >= 5
+                else f"{passed}/5 MODERATE" if passed >= 3
+                else f"{passed}/5 BLOCKED"
+            ),
+            "details": gates,
+            "symbol": symbol,
+        }
+
+    def evaluate_symbol_signal(
+        self,
+        symbol: str,
+        htf_data: Optional[pd.DataFrame],
+        etf_data: Optional[pd.DataFrame],
+        current_price: Optional[dict],
+    ) -> Optional[TradeSignal]:
+        """Generate a live trade signal for a *symbol* — stateless.
+
+        Backend behind the dashboard's header trade-signal pill
+        (``GET /api/signal``).  Mirrors ``get_signal`` (regime → profile
+        strategy → ``generate_signal``) but uses ``_classify_regime``
+        directly instead of ``detect_regime``, so it NEVER mutates
+        hysteresis state, fires notifications, or broadcasts WebSocket
+        events — safe to call from a read-only HTTP route on every
+        dropdown symbol change.
+
+        Args:
+            symbol: Trading pair.
+            htf_data: Analyzed higher-timeframe DataFrame (adx, atr_ratio).
+            etf_data: Analyzed entry-timeframe DataFrame.
+            current_price: Current bid/ask dict from ``get_current_price``.
+
+        Returns:
+            ``TradeSignal`` if the profile's strategy produced one,
+            ``None`` on DEAD / NEWS_EVENT regimes or when no strategy is
+            configured for the classified regime.
+        """
+        if htf_data is None or htf_data.empty:
+            return None
+
+        latest = htf_data.iloc[-1]
+        adx = latest.get("adx", 0)
+        atr_ratio = latest.get("atr_ratio", 1.0)
+        if pd.isna(adx):
+            adx = 0
+        if pd.isna(atr_ratio):
+            atr_ratio = 1.0
+        regime = self._classify_regime(adx, atr_ratio)
+
+        # Same non-tradeable regimes as get_signal (VOLATILE falls through
+        # to "no strategy" naturally for profiles that don't map it).
+        if regime in (MarketRegime.DEAD, MarketRegime.NEWS_EVENT):
+            return None
+
+        strategy = self.strategies.get(regime)
+        if strategy is None:
+            return None
+
+        return strategy.generate_signal(
+            symbol, htf_data, etf_data, current_price
+        )
 
 
     def _get_session_from_time(self) -> SessionType:

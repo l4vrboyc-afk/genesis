@@ -78,6 +78,8 @@ def create_app(orchestrator) -> FastAPI:
     from .routes.ws_feed import register_routes as _reg_ws_feed
     from .routes.profile import register_routes as _reg_profile
     from .routes.override import register_routes as _reg_override
+    from .routes.evaluator import register_routes as _reg_evaluator
+    from .routes.signal import register_routes as _reg_signal
 
     _reg_status(app)
     _reg_candles(app)
@@ -93,6 +95,8 @@ def create_app(orchestrator) -> FastAPI:
     _reg_ws_feed(app)
     _reg_profile(app)
     _reg_override(app)
+    _reg_evaluator(app)
+    _reg_signal(app)
 
     # ── Static File Mounting ────────────────────────────────────────
 

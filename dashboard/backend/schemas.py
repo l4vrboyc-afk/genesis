@@ -84,6 +84,11 @@ class WSEventPayload(BaseModel):
     - ``PROFILE_CHANGED`` — active trading profile switched
     - ``OVERRIDE_TRIGGERED`` — emergency override action taken
     - ``GATE_EVAL`` — 5-gate evaluator results (pass/fail per gate, score)
+    - ``GATE_UPDATE`` — live header gateway pill snapshot pushed by the
+      orchestrator's background pill-snapshot broadcaster (same shape as
+      ``GET /api/evaluator``)
+    - ``SIGNAL_UPDATE`` — live header trade-signal pill snapshot (same
+      shape as ``GET /api/signal``)
     - ``SYSTEM_LOG`` — a log line from the bot
     - ``HANDSHAKE`` — initial connection confirmation
     """
