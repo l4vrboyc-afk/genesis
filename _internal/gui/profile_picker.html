@@ -5,11 +5,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Genesis — Select Profile</title>
 <style>
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+
 :root {
-  --bg: #080a12;
-  --panel: rgba(17, 22, 43, 0.7);
-  --border: rgba(255,255,255,0.08);
-  --text: #f3f4f6;
+  --bg: #06080e;
+  --panel: rgba(22, 27, 38, 0.72);
+  --border: rgba(255,255,255,0.12);
+  --text: #f8fafc;
   --muted: #9ca3af;
   --cyan: #00f2fe;
   --blue: #0070f3;
@@ -22,11 +24,14 @@
 }
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body {
-  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  font-family: 'Space Grotesk', 'Segoe UI', system-ui, -apple-system, sans-serif;
   background: var(--bg);
+  /* Deep obsidian with ambient aurora lighting — mirrors the dashboard */
   background-image:
-    radial-gradient(circle at 15% 30%, rgba(26,21,62,0.4) 0%, transparent 50%),
-    radial-gradient(circle at 85% 70%, rgba(15,34,64,0.4) 0%, transparent 50%);
+    radial-gradient(circle at 12% 12%, rgba(0, 112, 243, 0.08) 0%, transparent 42%),
+    radial-gradient(circle at 88% 22%, rgba(177, 85, 255, 0.06) 0%, transparent 38%),
+    radial-gradient(circle at 50% 90%, rgba(0, 230, 118, 0.05) 0%, transparent 45%),
+    radial-gradient(circle at 80% 80%, rgba(255, 255, 255, 0.02) 0%, transparent 40%);
   color: var(--text);
   min-height: 100vh;
   display: flex;
@@ -67,22 +72,32 @@ body {
 @media (max-width: 1024px) { .cards { grid-template-columns: repeat(2, 1fr); max-width: 700px; } }
 @media (max-width: 600px) { .cards { grid-template-columns: 1fr; max-width: 400px; } }
 
-/* ── Profile Card ────────────────────────────────────────── */
+/* ── Profile Card (Liquid Glass) ─────────────────────────── */
 .card {
   position: relative;
-  background: var(--panel);
-  border: 1.5px solid var(--border);
+  background: linear-gradient(145deg, rgba(22, 27, 38, 0.72) 0%, rgba(10, 12, 18, 0.55) 100%);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-top: 1px solid rgba(255,255,255,0.28); /* specular top highlight */
   border-radius: 16px;
   padding: 1.5rem 1.25rem;
   cursor: pointer;
   transition: all 0.25s ease;
-  backdrop-filter: blur(12px);
+  backdrop-filter: blur(18px) saturate(200%);
+  -webkit-backdrop-filter: blur(18px) saturate(200%);
   text-align: left;
+  box-shadow:
+    0 8px 32px 0 rgba(0, 0, 0, 0.45),
+    0 1px 0 0 rgba(255,255,255,0.10),
+    inset 0 1px 0 0 rgba(255,255,255,0.12);
 }
 .card:hover {
   transform: translateY(-4px);
-  border-color: rgba(255,255,255,0.18);
-  box-shadow: 0 12px 32px rgba(0,0,0,0.4);
+  border-color: rgba(255,255,255,0.22);
+  border-top-color: rgba(255,255,255,0.38);
+  box-shadow:
+    0 14px 44px 0 rgba(0,0,0,0.6),
+    0 1px 0 0 rgba(255,255,255,0.14),
+    inset 0 1px 0 0 rgba(255,255,255,0.16);
 }
 .card.selected {
   border-color: var(--cyan);
@@ -106,6 +121,8 @@ body {
   font-size: 0.80rem; color: var(--muted);
   line-height: 1.5; margin-bottom: 1rem;
 }
+.card-meta-row span:not(.icon) { font-family: 'JetBrains Mono', monospace; }
+.card-meta-row .icon { font-family: 'Space Grotesk', sans-serif; }
 .card-meta { display: flex; flex-direction: column; gap: 0.4rem; }
 .card-meta-row {
   display: flex; align-items: center; gap: 0.5rem;
@@ -120,15 +137,18 @@ body {
   outline-offset: 2px;
 }
 
-/* ── Preflight Panel ─────────────────────────────────────── */
+/* ── Preflight Panel (Liquid Glass) ─────────────────────── */
 .preflight-panel {
   width: 100%; max-width: 1200px;
-  background: var(--panel);
-  border: 1px solid var(--border);
+  background: linear-gradient(145deg, rgba(22, 27, 38, 0.72) 0%, rgba(10, 12, 18, 0.55) 100%);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-top: 1px solid rgba(255,255,255,0.28);
   border-radius: 12px;
   padding: 1rem 1.25rem;
   margin-bottom: 1.25rem;
-  backdrop-filter: blur(8px);
+  backdrop-filter: blur(18px) saturate(200%);
+  -webkit-backdrop-filter: blur(18px) saturate(200%);
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.45), inset 0 1px 0 0 rgba(255,255,255,0.12);
   display: none;
 }
 .preflight-panel.visible { display: block; }
@@ -167,6 +187,7 @@ body {
   color: #000;
   transition: all 0.2s ease;
   box-shadow: 0 4px 20px rgba(0,242,254,0.2);
+  font-family: 'Space Grotesk', sans-serif;
 }
 .launch-btn:hover:not(:disabled) {
   transform: translateY(-2px);
@@ -244,49 +265,53 @@ body {
   <div class="card" data-profile="default" tabindex="0">
     <div class="card-badge badge-default">Default</div>
     <h3>Swing Trader</h3>
-    <p class="card-desc">H4 trend filter with M15 entries. Balanced risk-reward for medium-term positions.</p>
+    <p class="card-desc">H4/M1 Institutional Swing Matrix with ATR trailing stops for multi-day trends on FX &amp; Commodities.</p>
     <div class="card-meta">
-      <div class="card-meta-row"><span class="icon">&#9201;</span> Timeframes: <span>H4 / M15</span></div>
+      <div class="card-meta-row"><span class="icon">&#9201;</span> Timeframes: <span>H4 / H1</span></div>
       <div class="card-meta-row"><span class="icon">&#128202;</span> Max Positions: <span>3</span></div>
       <div class="card-meta-row"><span class="icon">&#9889;</span> Risk / Trade: <span>1.0%</span></div>
-      <div class="card-meta-row"><span class="icon">&#128737;</span> R:R Ratio: <span>2.0</span></div>
+      <div class="card-meta-row"><span class="icon">&#128737;</span> R:R Ratio: <span>2.5</span></div>
+      <div class="card-meta-row"><span class="icon">&#128200;</span> Pairs: <span>17 (Includes XAUUSD)</span></div>
     </div>
   </div>
 
   <div class="card" data-profile="scalper" tabindex="0">
     <div class="card-badge badge-scalper">Scalper</div>
-    <h3>Fast Scalper</h3>
-    <p class="card-desc">M15 trend filter with M1 entries. Tight stops, smaller targets, higher frequency.</p>
+    <h3>Range Fade Scalper</h3>
+    <p class="card-desc">M15/M1 mean-reversion engine across tight-range pairs &amp; high-volatility Gold channel fades.</p>
     <div class="card-meta">
       <div class="card-meta-row"><span class="icon">&#9201;</span> Timeframes: <span>M15 / M1</span></div>
-      <div class="card-meta-row"><span class="icon">&#128202;</span> Max Positions: <span>5</span></div>
+      <div class="card-meta-row"><span class="icon">&#128202;</span> Max Positions: <span>4</span></div>
       <div class="card-meta-row"><span class="icon">&#9889;</span> Risk / Trade: <span>0.5%</span></div>
-      <div class="card-meta-row"><span class="icon">&#128737;</span> R:R Ratio: <span>1.0</span></div>
+      <div class="card-meta-row"><span class="icon">&#128737;</span> R:R Ratio: <span>1.2</span></div>
+      <div class="card-meta-row"><span class="icon">&#128200;</span> Pairs: <span>17 (Includes XAUUSD)</span></div>
     </div>
   </div>
 
   <div class="card" data-profile="breakout" tabindex="0">
     <div class="card-badge badge-breakout">Breakout</div>
     <h3>Breakout Hunter</h3>
-    <p class="card-desc">H1 trend filter with M15 entries. Targets range breakouts with wider stops.</p>
+    <p class="card-desc">H1/M15 kinetic breakout system. ADX gate 28+, volume surge, and high-energy Gold expansions.</p>
     <div class="card-meta">
       <div class="card-meta-row"><span class="icon">&#9201;</span> Timeframes: <span>H1 / M15</span></div>
-      <div class="card-meta-row"><span class="icon">&#128202;</span> Max Positions: <span>2</span></div>
+      <div class="card-meta-row"><span class="icon">&#128202;</span> Max Positions: <span>3</span></div>
       <div class="card-meta-row"><span class="icon">&#9889;</span> Risk / Trade: <span>1.5%</span></div>
-      <div class="card-meta-row"><span class="icon">&#128737;</span> R:R Ratio: <span>1.5</span></div>
+      <div class="card-meta-row"><span class="icon">&#128737;</span> R:R Ratio: <span>3.0</span></div>
+      <div class="card-meta-row"><span class="icon">&#128200;</span> Pairs: <span>18 (Includes XAUUSD)</span></div>
     </div>
   </div>
 
   <div class="card" data-profile="daytrader" tabindex="0">
     <div class="card-badge badge-daytrader">Day Trader</div>
-    <h3>Day Trader</h3>
-    <p class="card-desc">3×14 matrix: Trend Engine + Mean Reversion + Breakout across 14 pairs. Session-aware strategy routing.</p>
+    <h3>Universal Day Trader</h3>
+    <p class="card-desc">3-strategy matrix across 22 pairs. TrendEngine (London/NY), MeanReversion (Asian), SessionBreakout (opens). Session-aware routing.</p>
     <div class="card-meta">
       <div class="card-meta-row"><span class="icon">&#9201;</span> Timeframes: <span>H1 / M15</span></div>
-      <div class="card-meta-row"><span class="icon">&#128202;</span> Max Positions: <span>3</span></div>
+      <div class="card-meta-row"><span class="icon">&#128202;</span> Max Positions: <span>4</span></div>
       <div class="card-meta-row"><span class="icon">&#9889;</span> Risk / Trade: <span>1.0%</span></div>
       <div class="card-meta-row"><span class="icon">&#128737;</span> R:R Ratio: <span>2.0</span></div>
       <div class="card-meta-row"><span class="icon">&#128453;</span> Session: <span>Session-Aware</span></div>
+      <div class="card-meta-row"><span class="icon">&#128200;</span> Pairs: <span>22</span></div>
     </div>
   </div>
 </div>
@@ -311,7 +336,7 @@ body {
 
 <div class="overlay" id="overlay">
   <div class="spinner"></div>
-  <p>Starting <span class="profile-name" id="overlayProfile">—</span>&hellip;<br>This may take a few seconds.</p>
+  <p>Starting <span class="profile-name" id="overlayProfile">—</span>&hellip;<br>Launching dashboard &mdash; this should take under 5 seconds.</p>
 </div>
 
 <div class="footer">Genesis Trading Bot &middot; Paper Trading &middot; Demo Only</div>
@@ -474,15 +499,15 @@ function launchProfile() {
     .then(resp => {
       if (resp && resp.ok) {
         // Launcher handles navigation in a background thread — overlay stays
-        // until the webview navigates away.  Safety timeout: if the webview
-        // doesn't navigate within 90 s (bot can take up to 60 s to bind port),
-        // dismiss the overlay and show an error so the user isn't stuck.
+        // until the webview navigates away.  Safety timeout: with the fast-boot
+        // optimisations the dashboard should bind within 5 s.  Give it 15 s max
+        // before showing an error so the user isn't stuck.
         setTimeout(() => {
           if (document.getElementById('overlay').classList.contains('active')) {
             document.getElementById('overlay').classList.remove('active');
             showError('Dashboard navigation timed out. Check logs/launcher.log for details.');
           }
-        }, 90000);
+        }, 15000);
       } else {
         document.getElementById('overlay').classList.remove('active');
         showError('Launch failed: ' + (resp ? resp.error || 'unknown' : 'no response'));
@@ -507,8 +532,8 @@ function showError(msg) {
 }
 
 /* ── Bridge detection ─────────────────────────────────────── */
-const BRIDGE_POLL_MS = 200;
-const BRIDGE_MAX_TRIES = 50; // ~10 s worst case
+const BRIDGE_POLL_MS = 100;
+const BRIDGE_MAX_TRIES = 25; // ~2.5 s worst case
 let _bridgeTries = 0;
 let _bridgeReady = false;
 

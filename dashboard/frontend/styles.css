@@ -1,0 +1,923 @@
+/* ── OLED Obsidian + Liquid Glass Dashboard — Genesis Trading Engine ── */
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+
+body {
+  font-family: 'Space Grotesk', sans-serif;
+  background-color: #06080e;
+  /* Deep obsidian with ambient aurora lighting behind glass layers */
+  background-image:
+    radial-gradient(circle at 12% 12%, rgba(0, 112, 243, 0.08) 0%, transparent 42%),
+    radial-gradient(circle at 88% 22%, rgba(177, 85, 255, 0.06) 0%, transparent 38%),
+    radial-gradient(circle at 50% 90%, rgba(0, 230, 118, 0.05) 0%, transparent 45%),
+    radial-gradient(circle at 80% 80%, rgba(255, 255, 255, 0.02) 0%, transparent 40%);
+  color: #f8fafc;
+  min-height: 100vh;
+}
+
+/* Monospaced Numerical Alignment (Fixes price twitching) */
+.mono-num {
+  font-family: 'JetBrains Mono', monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Liquid Glass Material (high-gloss specular) ────────────────── */
+.liquid-glass,
+.glass-card {
+  background: linear-gradient(145deg, rgba(22, 27, 38, 0.72) 0%, rgba(10, 12, 18, 0.55) 100%);
+  backdrop-filter: blur(18px) saturate(200%);
+  -webkit-backdrop-filter: blur(18px) saturate(200%);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-top: 1px solid rgba(255, 255, 255, 0.28); /* specular top highlight */
+  border-radius: 16px;
+  box-shadow:
+    0 8px 32px 0 rgba(0, 0, 0, 0.45),
+    0 1px 0 0 rgba(255, 255, 255, 0.10),   /* outer top sheen */
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.12),  /* polished inner top */
+    inset 0 0 24px 0 rgba(255, 255, 255, 0.02); /* soft inner glow */
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.liquid-glass:hover,
+.glass-card:hover {
+  border-color: rgba(255, 255, 255, 0.22);
+  border-top-color: rgba(255, 255, 255, 0.38);
+  box-shadow:
+    0 14px 44px 0 rgba(0, 0, 0, 0.6),
+    0 1px 0 0 rgba(255, 255, 255, 0.14),
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.16);
+}
+
+/* Liquid glass modal — deeper blur, stronger sheen */
+.liquid-glass-modal {
+  background: linear-gradient(150deg, rgba(14, 18, 28, 0.92) 0%, rgba(8, 10, 16, 0.9) 100%);
+  backdrop-filter: blur(26px) saturate(220%);
+  -webkit-backdrop-filter: blur(26px) saturate(220%);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-top: 1px solid rgba(255, 255, 255, 0.34);
+  border-radius: 18px;
+  box-shadow:
+    0 24px 60px rgba(0, 0, 0, 0.65),
+    0 1px 0 0 rgba(255, 255, 255, 0.12),
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.14);
+}
+
+/* ── Header / Action Controls ───────────────────────────────────── */
+.engine-tag {
+  font-size: 10px;
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  color: #a1a1aa;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  font-family: 'JetBrains Mono', monospace;
+  letter-spacing: 0.08em;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.status-pill-group {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 0.3rem 0.6rem;
+  border-radius: 999px;
+  backdrop-filter: blur(12px);
+}
+
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.68rem;
+  font-weight: 700;
+  font-family: 'JetBrains Mono', monospace;
+  letter-spacing: 0.05em;
+  color: #d4d4d8;
+  text-transform: uppercase;
+}
+
+.status-badge.live { color: #4ade80; }
+
+/* ── Engine State Toggle Button ──────────────────────────────────── */
+.engine-btn {
+  padding: 6px 14px;
+  font-weight: 700;
+  font-size: 0.72rem;
+  font-family: 'JetBrains Mono', monospace;
+  letter-spacing: 0.06em;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: 1px solid transparent;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.engine-btn.running {
+  background: rgba(74, 222, 128, 0.15);
+  color: #4ade80;
+  border-color: rgba(74, 222, 128, 0.45);
+  box-shadow: 0 0 14px rgba(74, 222, 128, 0.25), inset 0 1px 0 0 rgba(74, 222, 128, 0.2);
+}
+
+.engine-btn.running:hover {
+  background: rgba(74, 222, 128, 0.25);
+  box-shadow: 0 0 22px rgba(74, 222, 128, 0.4);
+}
+
+.engine-btn.paused {
+  background: rgba(248, 113, 113, 0.15);
+  color: #f87171;
+  border-color: rgba(248, 113, 113, 0.45);
+  box-shadow: 0 0 14px rgba(248, 113, 113, 0.25), inset 0 1px 0 0 rgba(248, 113, 113, 0.2);
+}
+
+.engine-btn.paused:hover {
+  background: rgba(248, 113, 113, 0.25);
+  box-shadow: 0 0 22px rgba(248, 113, 113, 0.4);
+}
+
+.engine-btn:disabled {
+  opacity: 0.5;
+  cursor: wait;
+}
+
+/* ── Liquid Buttons ─────────────────────────────────────────────── */
+.liquid-btn {
+  padding: 8px 16px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  font-family: 'JetBrains Mono', monospace;
+  letter-spacing: 0.04em;
+  color: #e4e4e7;
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.04));
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-top: 1px solid rgba(255, 255, 255, 0.32);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.3), inset 0 1px 0 0 rgba(255, 255, 255, 0.12);
+}
+
+.liquid-btn:hover {
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.08));
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.4), inset 0 1px 0 0 rgba(255, 255, 255, 0.18);
+}
+
+.liquid-btn-sm {
+  padding: 5px 12px;
+  font-size: 0.62rem;
+  font-weight: 700;
+  font-family: 'JetBrains Mono', monospace;
+  letter-spacing: 0.06em;
+  color: #d4d4d8;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-top: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.liquid-btn-sm:hover {
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.icon-btn {
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+  color: #d4d4d8;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 9px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.icon-btn:hover {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+/* ── Dropdown Menu ──────────────────────────────────────────────── */
+.dropdown-menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 8px);
+  width: 240px;
+  z-index: 60;
+  padding: 0.5rem 0;
+}
+
+.dropdown-label {
+  padding: 0.4rem 1rem 0.4rem;
+  font-size: 0.62rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: #71717a;
+}
+
+.dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.5rem 1rem;
+  font-size: 0.78rem;
+  color: #d4d4d8;
+  transition: all 0.15s ease;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.dropdown-item:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #ffffff;
+}
+
+.dropdown-sep {
+  height: 1px;
+  margin: 0.35rem 0.75rem;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+/* ── Interactive Rows ───────────────────────────────────────────── */
+.clickable-row {
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.clickable-row:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+/* ── PnL Color Classes ─────────────────────────────────────────── */
+.positive { color: #4ade80; }
+.negative { color: #f87171; }
+
+.badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 5px;
+  font-size: 10px;
+  font-weight: 700;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.badge.buy {
+  background: rgba(74, 222, 128, 0.14);
+  color: #4ade80;
+  border: 1px solid rgba(74, 222, 128, 0.3);
+}
+
+.badge.sell {
+  background: rgba(248, 113, 113, 0.14);
+  color: #f87171;
+  border: 1px solid rgba(248, 113, 113, 0.3);
+}
+
+/* ── Chart Container ────────────────────────────────────────────── */
+.chart-container {
+  position: relative;
+  height: 200px;
+  width: 100%;
+}
+
+.chart-modal-body {
+  position: relative;
+  height: 520px;
+  width: 100%;
+}
+
+/* ── Modal Overlays ────────────────────────────────────────────── */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: rgba(4, 6, 10, 0.78);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+}
+
+.modal-overlay.hidden { display: none; }
+
+.modal-content {
+  width: 100%;
+  max-width: 64rem;
+  max-height: 90vh;
+  overflow-y: auto;
+  padding: 1.25rem 1.5rem;
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  padding-bottom: 0.8rem;
+  margin-bottom: 1rem;
+}
+
+.modal-title {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: #ffffff;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.close-btn {
+  padding: 4px 12px;
+  font-size: 0.68rem;
+  font-family: 'JetBrains Mono', monospace;
+  color: #a1a1aa;
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.close-btn:hover {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.modal-body { color: #d4d4d8; }
+
+.history-modal { max-width: 72rem; }
+
+.history-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.6rem;
+  margin-bottom: 1rem;
+}
+
+.hm-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: 0.6rem 0.8rem;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-top: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 10px;
+}
+
+.hm-label {
+  font-size: 0.6rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #71717a;
+}
+
+.hm-value {
+  font-size: 1rem;
+  font-weight: 700;
+  font-family: 'JetBrains Mono', monospace;
+  color: #e4e4e7;
+}
+
+/* ── Position Modal ────────────────────────────────────────────── */
+.position-modal { max-width: 40rem; }
+
+.pos-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.6rem;
+  margin-bottom: 1rem;
+}
+
+.pos-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: 0.6rem 0.8rem;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-top: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 10px;
+}
+
+.pos-label {
+  font-size: 0.6rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #71717a;
+}
+
+.pos-value {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #e4e4e7;
+}
+
+.pos-trail-row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  margin: 0.5rem 0 1rem;
+  flex-wrap: wrap;
+}
+
+/* ── Position Mini Candlestick Chart ────────────────────────────── */
+.pos-chart-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 0.9rem 0 0.5rem;
+}
+
+.pos-tf-group {
+  display: flex;
+  gap: 0.35rem;
+}
+
+.pos-tf {
+  padding: 3px 10px;
+  font-size: 0.6rem;
+  font-weight: 700;
+  font-family: 'JetBrains Mono', monospace;
+  color: #a1a1aa;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.pos-tf:hover {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.pos-tf.active {
+  color: #4ade80;
+  background: rgba(74, 222, 128, 0.14);
+  border-color: rgba(74, 222, 128, 0.4);
+}
+
+.pos-chart-wrap {
+  position: relative;
+  height: 180px;
+  width: 100%;
+  margin-bottom: 0.9rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-top: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.35);
+  overflow: hidden;
+}
+
+.pos-trail-row .liquid-input {
+  width: 130px;
+}
+
+.btn-danger {
+  padding: 9px 18px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  font-family: 'JetBrains Mono', monospace;
+  letter-spacing: 0.05em;
+  color: #f87171;
+  background: rgba(248, 113, 113, 0.12);
+  border: 1px solid rgba(248, 113, 113, 0.4);
+  border-top: 1px solid rgba(248, 113, 113, 0.5);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 0 14px rgba(248, 113, 113, 0.15);
+}
+
+.btn-danger:hover {
+  background: rgba(248, 113, 113, 0.25);
+  box-shadow: 0 0 22px rgba(248, 113, 113, 0.3);
+}
+
+/* ── Mini chart canvas sizing ───────────────────────────────────── */
+.chart-canvas {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+/* ── Table hover row ───────────────────────────────────────────── */
+.table-row-hover:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+/* Glass Inputs */
+.glass-input {
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 8px;
+  color: #ffffff;
+  transition: all 0.2s ease;
+}
+
+.glass-input:focus {
+  border-color: #ffffff;
+  box-shadow: 0 0 12px rgba(255, 255, 255, 0.2);
+  outline: none;
+}
+
+/* Glass Select */
+.glass-select {
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 8px;
+  color: #ffffff;
+  transition: all 0.2s ease;
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
+  background-position: right 0.5rem center;
+  background-repeat: no-repeat;
+  background-size: 1.5em 1.5em;
+  padding-right: 2.5rem;
+}
+
+.glass-select:focus {
+  border-color: #ffffff;
+  box-shadow: 0 0 12px rgba(255, 255, 255, 0.2);
+  outline: none;
+}
+
+/* Pulsing Status Dot Animation */
+.pulse-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+  position: relative;
+}
+
+.pulse-dot.online {
+  background-color: #22c55e;
+  box-shadow: 0 0 10px #22c55e;
+}
+
+.pulse-dot.online::after {
+  content: '';
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  top: 0;
+  left: 0;
+  border-radius: 50%;
+  background-color: #22c55e;
+  animation: pulse-ring 1.8s infinite;
+}
+
+.pulse-dot.offline {
+  background-color: #ef4444;
+  box-shadow: 0 0 10px #ef4444;
+}
+
+.pulse-dot.offline::after {
+  content: '';
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  top: 0;
+  left: 0;
+  border-radius: 50%;
+  background-color: #ef4444;
+  animation: pulse-ring 1.8s infinite;
+}
+
+@keyframes pulse-ring {
+  0% { transform: scale(1); opacity: 0.8; }
+  100% { transform: scale(2.5); opacity: 0; }
+}
+
+/* Live ticker marquee */
+.ticker-marquee {
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.ticker-content {
+  display: inline-block;
+  animation: ticker-scroll 30s linear infinite;
+}
+
+@keyframes ticker-scroll {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+/* Toast notification */
+.toast-container {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.toast {
+  background: linear-gradient(135deg, rgba(20, 20, 25, 0.9), rgba(10, 10, 12, 0.7));
+  backdrop-filter: blur(16px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 12px;
+  padding: 12px 20px;
+  color: #f8fafc;
+  font-size: 12px;
+  font-family: 'JetBrains Mono', monospace;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+  animation: toast-in 0.3s ease-out;
+  max-width: 400px;
+}
+
+@keyframes toast-in {
+  from { transform: translateX(100%); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+/* ── Ticker Strip Styles ────────────────────────────────────────── */
+.ticker-strip {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.ticker-strip::-webkit-scrollbar {
+  display: none;
+}
+
+.ticker-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.75rem;
+  font-family: 'JetBrains Mono', monospace;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.ticker-sym {
+  color: #e2e8f0;
+  font-weight: 600;
+}
+
+.ticker-bid {
+  color: #a3e635;
+}
+
+.ticker-ask {
+  color: #f87171;
+}
+
+.ticker-spread {
+  font-size: 0.65rem;
+  padding: 0.08rem 0.3rem;
+  border-radius: 3px;
+}
+.ticker-spread.tight {
+  color: #4ade80;
+  background: rgba(74, 222, 128, 0.1);
+}
+.ticker-spread.medium {
+  color: #facc15;
+  background: rgba(250, 204, 21, 0.1);
+}
+.ticker-spread.wide {
+  color: #f87171;
+  background: rgba(248, 113, 113, 0.1);
+}
+
+.ticker-price-change {
+  font-size: 0.65rem;
+  min-width: 1.2rem;
+  text-align: center;
+}
+.ticker-price-change.up {
+  color: #4ade80;
+}
+/* ── Profile Badge Styles ───────────────────────────────────────── */
+.profile-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.25rem 0.75rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  transition: background 0.3s ease, border-color 0.3s ease;
+}
+.profile-default {
+  background: rgba(255, 255, 255, 0.08);
+  color: #e2e8f0;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+.profile-scalper {
+  background: rgba(251, 146, 60, 0.15);
+  color: #fb923c;
+  border: 1px solid rgba(251, 146, 60, 0.2);
+}
+.profile-breakout {
+  background: rgba(167, 139, 250, 0.15);
+  color: #a78bfa;
+  border: 1px solid rgba(167, 139, 250, 0.2);
+}
+.profile-daytrader {
+  background: rgba(74, 222, 128, 0.15);
+  color: #4ade80;
+  border: 1px solid rgba(74, 222, 128, 0.2);
+}
+
+/* ── Profile Flash Animations ───────────────────────────────────── */
+.flash-cyan {
+  animation: flash-cyan 0.5s ease-out;
+}
+.flash-orange {
+  animation: flash-orange 0.5s ease-out;
+}
+.flash-purple {
+  animation: flash-purple 0.5s ease-out;
+}
+.flash-green {
+  animation: flash-green 0.5s ease-out;
+}
+
+@keyframes flash-cyan {
+  0%   { box-shadow: 0 0 20px rgba(0, 242, 254, 0.6); background: rgba(0, 242, 254, 0.15); }
+  100% { box-shadow: 0 0 0px rgba(0, 242, 254, 0); background: transparent; }
+}
+@keyframes flash-orange {
+  0%   { box-shadow: 0 0 20px rgba(251, 146, 60, 0.6); background: rgba(251, 146, 60, 0.15); }
+  100% { box-shadow: 0 0 0px rgba(251, 146, 60, 0); background: transparent; }
+}
+@keyframes flash-purple {
+  0%   { box-shadow: 0 0 20px rgba(167, 139, 250, 0.6); background: rgba(167, 139, 250, 0.15); }
+  100% { box-shadow: 0 0 0px rgba(167, 139, 250, 0); background: transparent; }
+}
+@keyframes flash-green {
+  0%   { box-shadow: 0 0 20px rgba(74, 222, 128, 0.6); background: rgba(74, 222, 128, 0.15); }
+  100% { box-shadow: 0 0 0px rgba(74, 222, 128, 0); background: transparent; }
+}
+
+/* ── Regime Badge ───────────────────────────────────────────────── */
+.regime-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.2rem 0.6rem;
+  border-radius: 6px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  font-family: 'JetBrains Mono', monospace;
+  background: rgba(255, 255, 255, 0.05);
+  color: #94a3b8;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.ticker-price-change.down {
+  color: #f87171;
+}
+.ticker-price-change.flat {
+  color: #64748b;
+}
+
+.ticker-sep {
+  color: rgba(255, 255, 255, 0.1);
+  margin: 0 0.15rem;
+}
+
+/* Discord Status Badge Styling */
+.status-badge.discord-connected {
+  background: rgba(88, 101, 242, 0.2);
+  color: #5865F2;
+  border: 1px solid rgba(88, 101, 242, 0.4);
+  box-shadow: 0 0 10px rgba(88, 101, 242, 0.2);
+  cursor: pointer;
+}
+
+.status-badge.discord-disconnected {
+  background: rgba(255, 255, 255, 0.05);
+  color: #94a3b8;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.status-badge.discord-disconnected:hover {
+  border-color: rgba(88, 101, 242, 0.5);
+  color: #fff;
+}
+
+/* Discord icon inside status badge */
+.status-badge .discord-icon {
+  font-size: 0.85rem;
+  line-height: 1;
+}
+
+/* Discord status text */
+.discord-status-text {
+  font-family: 'JetBrains Mono', monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Liquid Glass Buttons (modal & inline) ──────────────────────────── */
+.liquid-btn-primary {
+  background: linear-gradient(135deg, rgba(88, 101, 242, 0.5), rgba(124, 92, 242, 0.4));
+  border: 1px solid rgba(88, 101, 242, 0.4);
+  color: #ffffff;
+  padding: 0.5rem 1rem;
+  border-radius: 10px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  backdrop-filter: blur(8px);
+}
+
+.liquid-btn-primary:hover {
+  background: linear-gradient(135deg, rgba(88, 101, 242, 0.7), rgba(124, 92, 242, 0.6));
+  border-color: rgba(88, 101, 242, 0.6);
+  box-shadow: 0 4px 20px rgba(88, 101, 242, 0.3);
+}
+
+/* ── Discord Modal Form Styles ──────────────────────────────────── */
+.modal-actions {
+  display: flex;
+  gap: 0.75rem;
+  margin-top: 1.25rem;
+}
+
+.form-row {
+  margin-bottom: 1rem;
+}
+
+.form-label {
+  display: block;
+  font-size: 0.65rem;
+  font-weight: 700;
+  font-family: 'JetBrains Mono', monospace;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #94a3b8;
+  margin-bottom: 0.35rem;
+}
+
+.toggle-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin: 1rem 0;
+}
+
+.toggle-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.8rem;
+  color: #d4d4d8;
+  cursor: pointer;
+  user-select: none;
+}
+
+.toggle-item input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: #5865f2;
+  cursor: pointer;
+}

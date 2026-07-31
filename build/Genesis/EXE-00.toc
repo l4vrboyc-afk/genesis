@@ -59,32 +59,28 @@
    'Projects\\Genesis\\build\\Genesis\\localpycs\\pyimod04_pywin32.pyc',
    'PYMODULE'),
   ('pyiboot01_bootstrap',
-   'C:\\Users\\Moses '
-   'Egbunike\\AppData\\Local\\hermes\\hermes-agent\\venv\\Lib\\site-packages\\PyInstaller\\loader\\pyiboot01_bootstrap.py',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\PyInstaller\\loader\\pyiboot01_bootstrap.py',
    'PYSOURCE'),
   ('pyi_rth_inspect',
-   'C:\\Users\\Moses '
-   'Egbunike\\AppData\\Local\\hermes\\hermes-agent\\venv\\Lib\\site-packages\\PyInstaller\\hooks\\rthooks\\pyi_rth_inspect.py',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\PyInstaller\\hooks\\rthooks\\pyi_rth_inspect.py',
    'PYSOURCE'),
   ('pyi_rth_pkgutil',
-   'C:\\Users\\Moses '
-   'Egbunike\\AppData\\Local\\hermes\\hermes-agent\\venv\\Lib\\site-packages\\PyInstaller\\hooks\\rthooks\\pyi_rth_pkgutil.py',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\PyInstaller\\hooks\\rthooks\\pyi_rth_pkgutil.py',
    'PYSOURCE'),
   ('pyi_rth_multiprocessing',
-   'C:\\Users\\Moses '
-   'Egbunike\\AppData\\Local\\hermes\\hermes-agent\\venv\\Lib\\site-packages\\PyInstaller\\hooks\\rthooks\\pyi_rth_multiprocessing.py',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\PyInstaller\\hooks\\rthooks\\pyi_rth_multiprocessing.py',
    'PYSOURCE'),
   ('pyi_rth_setuptools',
-   'C:\\Users\\Moses '
-   'Egbunike\\AppData\\Local\\hermes\\hermes-agent\\venv\\Lib\\site-packages\\PyInstaller\\hooks\\rthooks\\pyi_rth_setuptools.py',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\PyInstaller\\hooks\\rthooks\\pyi_rth_setuptools.py',
    'PYSOURCE'),
   ('pyi_rth_pkgres',
-   'C:\\Users\\Moses '
-   'Egbunike\\AppData\\Local\\hermes\\hermes-agent\\venv\\Lib\\site-packages\\PyInstaller\\hooks\\rthooks\\pyi_rth_pkgres.py',
-   'PYSOURCE'),
-  ('pyi_rth_cryptography_openssl',
-   'C:\\Users\\Moses '
-   'Egbunike\\AppData\\Local\\hermes\\hermes-agent\\venv\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\rthooks\\pyi_rth_cryptography_openssl.py',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\PyInstaller\\hooks\\rthooks\\pyi_rth_pkgres.py',
    'PYSOURCE'),
   ('launch_gui',
    'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
@@ -93,10 +89,10 @@
  [],
  False,
  False,
- 1785164025,
+ 1785518852,
  [('runw.exe',
-   'C:\\Users\\Moses '
-   'Egbunike\\AppData\\Local\\hermes\\hermes-agent\\venv\\Lib\\site-packages\\PyInstaller\\bootloader\\Windows-64bit-intel\\runw.exe',
+   'C:\\Users\\Moses Egbunike\\Documents\\Claude Code '
+   'Projects\\Genesis\\.venv\\Lib\\site-packages\\PyInstaller\\bootloader\\Windows-64bit-intel\\runw.exe',
    'EXECUTABLE')],
  'C:\\Users\\Moses '
  'Egbunike\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none\\python311.dll')

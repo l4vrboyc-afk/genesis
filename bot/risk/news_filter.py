@@ -26,6 +26,11 @@ class NewsFilter:
         self._last_refresh = None
         self._no_trade_pairs = set()  # Currently blocked pairs
 
+        # Fix #7: Track which source provided the last calendar refresh
+        # ("live_mt5" for MT5 native calendar, "fallback" for recurring
+        # events schedule). Used by /api/news to indicate calendar reliability.
+        self._last_news_source: str = "unknown"
+
         # Track (d) — Injected by ``TradingOrchestrator.start``. When set,
         # ``refresh_calendar_async`` hops the (potentially-heavy)
         # ``mt5.calendar_value_history`` call onto the executor's single
@@ -70,8 +75,10 @@ class NewsFilter:
             if events is not None and len(events) > 0:
                 self._cached_events = self._parse_mt5_events(events)
                 self._last_refresh = now
+                # Fix #7: Mark source as live MT5 calendar
+                self._last_news_source = "live_mt5"
                 logger.info(
-                    f"📅 Calendar refreshed: {len(self._cached_events)} high-impact events"
+                    f"📅 Calendar refreshed (live MT5): {len(self._cached_events)} high-impact events"
                 )
                 return
 
@@ -87,7 +94,13 @@ class NewsFilter:
         # the native MT5 calendar path.
         self._cached_events = self._fallback_recurring_events()
         self._last_refresh = datetime.now()
-        logger.info("📅 Using recurring event schedule as fallback")
+        # Fix #7: Mark source as fallback schedule
+        if self._cached_events:
+            self._last_news_source = "fallback"
+            logger.info(f"📅 Using recurring event schedule as fallback ({len(self._cached_events)} events)")
+        else:
+            self._last_news_source = "empty"
+            logger.info("📅 Fallback calendar returned no events — news filter inactive")
 
     def attach_executor(self, executor) -> None:
         """Inject the serialised MT5 executor (see ``RiskManager.attach_executor``)."""
@@ -197,6 +210,49 @@ class NewsFilter:
                     })
 
         return events
+
+    # ── Global Tier-1 News Lockout ─────────────────────────────────
+
+    def has_global_tier1_event_near(self, buffer_minutes: int | None = None) -> bool:
+        """Check if a global market-moving event is within the buffer window.
+
+        Tier-1 events (FOMC, NFP, US CPI, ECB/BOE rate decisions) affect
+        ALL pairs — not just the event's home currency.  When True, the
+        orchestrator should force NEWS_EVENT regime and halt all trading
+        until the event window passes.
+
+        Args:
+            buffer_minutes: Buffer to use (defaults to
+                ``settings.news_buffer_minutes_before``).
+
+        Returns:
+            True if a global Tier-1 event is within the buffer window.
+        """
+        if not settings.news_filter_enabled:
+            return False
+
+        if not self._cached_events:
+            return False
+
+        buffer = buffer_minutes or settings.news_buffer_minutes_before
+        now = datetime.now()
+
+        # Events whose currency indicates global market impact.
+        # USD events (FOMC, NFP, CPI) and major central bank decisions
+        # (ECB, BOE, BOJ) are classified as Tier-1.
+        global_currencies = {"USD", "EUR", "GBP", "JPY"}
+
+        for event in self._cached_events:
+            if event.get("currency", "") not in global_currencies:
+                continue
+            event_time = event["time"]
+            # Use the same buffer symmetrically for both sides of the event.
+            window_start = event_time - timedelta(minutes=buffer)
+            window_end = event_time + timedelta(minutes=buffer)
+            if window_start <= now <= window_end:
+                return True
+
+        return False
 
     # ── Trading Filter ──────────────────────────────────────────────
 

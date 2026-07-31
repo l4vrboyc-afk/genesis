@@ -4,7 +4,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 # ── Status ────────────────────────────────────────────────────────────
@@ -23,6 +23,7 @@ class StatusResponse(BaseModel):
     win_rate: float = Field(description="Win rate (0.0 – 1.0)")
     open_positions: int = Field(description="Number of open positions")
     regime: str = Field(description="Current market regime")
+    active_profile: str = Field(description="Active trading profile name")
     paper_trading: bool = Field(description="Whether paper trading is active")
     open_trades: List[Dict[str, Any]] = Field(
         default_factory=list,
@@ -55,6 +56,27 @@ class TradeResponse(BaseModel):
     strategy: Optional[str] = None
     market_regime: Optional[str] = None
     status: str = Field(description='"open" or "closed"')
+    position_value_usd: float = Field(
+        default=0.0,
+        description="Notional position value in USD (volume × contract size × entry price)",
+    )
+    return_r: float = Field(
+        default=0.0,
+        description="Realised R-multiple (PnL / initial risk amount)",
+    )
+
+    @model_validator(mode="before")
+    @classmethod
+    def _coalesce_null_metrics(cls, data: Any) -> Any:
+        """Coerce NULL position_value_usd / return_r to 0.0 so that
+        legacy database rows (written before these columns existed)
+        don't trigger Pydantic validation failures."""
+        if isinstance(data, dict):
+            if data.get("position_value_usd") is None:
+                data["position_value_usd"] = 0.0
+            if data.get("return_r") is None:
+                data["return_r"] = 0.0
+        return data
 
 
 class TradesListResponse(BaseModel):
@@ -126,6 +148,10 @@ class NewsListResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     events: List[NewsEventResponse]
+    news_source: str = Field(
+        default="unknown",
+        description='Source of calendar data: "live_mt5", "fallback", "empty", or "unknown"',
+    )
 
 
 # ── Risk ──────────────────────────────────────────────────────────────

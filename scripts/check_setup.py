@@ -69,7 +69,14 @@ try:
     if _profile:
         _pf = ROOT / f".env.{_profile.lower()}"
         if _pf.exists():
-            load_dotenv(dotenv_path=_pf, override=True)
+            # ── MT5 credential cascade ─────────────────────────────
+            # Profile .env files only specialise strategy params.  If they
+            # contain MT5_LOGIN=0 or empty MT5_PASSWORD, ``override=True``
+            # would wipe the real credentials from the base .env.  The
+            # shared utility snapshots before loading and restores wiped
+            # values  (mirrors the same logic in ``main.py``).
+            from bot.config.env_utils import preserve_mt5_credentials
+            preserve_mt5_credentials(_pf, load_dotenv)
 except ImportError:  # pragma: no cover — dotenv is in requirements.txt
     pass
 

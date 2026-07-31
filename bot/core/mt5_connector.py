@@ -17,8 +17,10 @@ from bot.config.settings import settings
 # "you probably need this" suggestion when MT5_PATH is empty.
 _WIN_DEFAULT_MT5 = r"C:\Program Files\MetaTrader 5\terminal64.exe"
 
+# Single locked-account server — profile switching must never change this.
+_LOCKED_SERVER = "MetaQuotes-Demo"
 
-# Known MT5 last_error() codes → human-readable remediation hints.
+# Known MT5 last_error_code codes → human-readable remediation hints.
 # Codes observed in the wild (and from the MetaTrader5 docs).
 _MT5_ERROR_HINTS: dict[int, str] = {
     -1:   "terminal64.exe is missing or MT5_PATH is wrong. Install MetaTrader 5 from your broker, or correct MT5_PATH in .env.",
@@ -171,6 +173,17 @@ class MT5Connector:
         account = mt5.account_info()
         if account is None:
             logger.error("❌ Failed to get account info after initialization")
+            mt5.shutdown()
+            return False
+
+        # ── Server guard: single locked account — always MetaQuotes-Demo ──
+        if account.server != _LOCKED_SERVER:
+            logger.error(
+                f"❌ WRONG SERVER: MT5 connected to '{account.server}' but Genesis "
+                f"is locked to '{_LOCKED_SERVER}'. Update MT5_SERVER in your .env "
+                f"file to '{_LOCKED_SERVER}' and restart. Profile switching does "
+                f"NOT change accounts — all profiles trade on {_LOCKED_SERVER}."
+            )
             mt5.shutdown()
             return False
 

@@ -1,0 +1,12 @@
+{
+  "name": "genesis-dashboard-tests",
+  "private": true,
+  "type": "commonjs",
+  "scripts": {
+    "test": "node --test tests/app.test.js",
+    "test:watch": "node --test --watch tests/app.test.js"
+  },
+  "devDependencies": {
+    "jsdom": "^25.0.0"
+  }
+}

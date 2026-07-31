@@ -10,6 +10,19 @@ import sys
 import os
 from pathlib import Path
 
+# ── UTF-8 bootstrap — must happen before ANY import that touches stdout ────────
+# PYTHONUTF8=1 is Python 3.7+ global UTF-8 mode: covers file I/O, subprocesses,
+# and streams that reconfigure() alone can miss (e.g. PyInstaller builds).
+os.environ.setdefault("PYTHONUTF8", "1")
+os.environ.setdefault("PYTHONIOENCODING", "utf-8")
+for _s in ("stdout", "stderr"):
+    _st = getattr(sys, _s, None)
+    if _st and hasattr(_st, "reconfigure"):
+        try:
+            _st.reconfigure(encoding="utf-8", errors="replace")
+        except Exception:
+            pass
+
 # Auto-re-execute in virtual environment if available and not already inside it
 _project_root = Path(__file__).resolve().parent
 _venv_dir = _project_root / ".venv"
@@ -31,31 +44,61 @@ import uvicorn
 from dotenv import load_dotenv
 from loguru import logger
 
-# Force UTF-8 on stdout/stderr so Unicode icons in the startup banner
-# and log lines render correctly on Windows consoles (default cp1252).
-# Mirrors scripts/check_setup.py. Idempotent — safe to run twice.
-for _stream_name in ("stdout", "stderr"):
-    _stream = getattr(sys, _stream_name, None)
-    if _stream and hasattr(_stream, "reconfigure"):
-        try:
-            _stream.reconfigure(encoding="utf-8")
-        except Exception:  # pragma: no cover — best effort
-            pass
+# ── MT5 env-var keys that the credential cascade protects ─────────────
+# Defined here rather than imported from ``bot.config.env_utils`` because
+# ``from bot.config.…`` triggers ``bot/config/__init__.py`` which imports
+# ``from bot.config.settings import settings``, creating the settings
+# singleton before the profile environment file has been loaded — and
+# before ``os.environ`` has the correct values.
+_MT5_KEYS = ("MT5_LOGIN", "MT5_PASSWORD", "MT5_SERVER", "MT5_PATH")
+_PLACEHOLDER_VALUES = frozenset({
+    "your_login", "your_password", "your_server",
+    "changeme", "placeholder", "<password>", "<server>",
+})
+def _is_placeholder(value: str) -> bool:
+    return not value or value == "0" or value.lower() in _PLACEHOLDER_VALUES
+
+def _preserve_mt5_credentials(profile_env_path, load_dotenv_func):
+    """Snapshot MT5 env vars, load profile env, restore placeholders."""
+    snapshot = {k: os.environ[k] for k in _MT5_KEYS if os.environ.get(k)}
+    load_dotenv_func(profile_env_path, override=True)
+    for key, base_value in snapshot.items():
+        current = os.environ.get(key, "").strip()
+        if _is_placeholder(current):
+            os.environ[key] = base_value
+
+# (UTF-8 bootstrap already applied above at module load, before any import)
 
 # Load environment variables — profile-aware merge so a non-default
 # profile (set via GENESIS_PROFILE by the GUI launcher) inherits keys
 # from the base .env and overrides only what it specializes (port,
-# strategy params, db). This honours the "falls back to .env for any
-# key not present here" contract documented in .env.<profile> and stops
-# the base profile's DASHBOARD_PORT / MT5 creds from leaking in.
-#   1. base .env  — override=False (don't clobber real shell vars)
-#   2. profile    — override=True  (profile values win over base)
+# strategy params, db).
+#
+# The order is CRITICAL:
+#   1. Load base .env first  → puts real MT5_LOGIN/PASSWORD into os.environ
+#   2. Load profile .env with MT5 cascade → puts DASHBOARD_PORT into
+#      os.environ, but restores any MT5 credential the profile wiped
+#      with a placeholder.
+#   3. THEN import settings → pydantic-settings reads the profile .env
+#      file, then checks os.environ: DASHBOARD_PORT=8003 matches the
+#      file, MT5_LOGIN=<real> overrides the file's placeholder "0".
+#
+# We inline the MT5 cascade here instead of importing from
+# ``bot.config.env_utils`` because ANY ``from bot.config.…`` triggers
+# ``bot/config/__init__.py → from bot.config.settings import settings``,
+# creating the singleton before step 2 has populated os.environ with
+# the profile-specific values.
 _profile = os.getenv("GENESIS_PROFILE")
 load_dotenv(dotenv_path=_project_root / ".env", override=False)
 if _profile:
     _pf = _project_root / f".env.{_profile.lower()}"
     if _pf.exists():
-        load_dotenv(dotenv_path=_pf, override=True)
+        # ── MT5 credential cascade (inlined) ───────────────────────────
+        # Profile .env files only specialise strategy params.  If they
+        # contain MT5_LOGIN=0 or empty MT5_PASSWORD, ``override=True``
+        # would wipe the real credentials from the base .env.  The
+        # cascade snapshots before loading and restores wiped values.
+        _preserve_mt5_credentials(_pf, load_dotenv)
 
 # Import settings AFTER loading profile env so log_file is correct
 from bot.config.settings import settings
@@ -72,6 +115,7 @@ logger.add(
     rotation="10 MB",
     retention="14 days",
     compression="zip",
+    encoding="utf-8",  # Explicit UTF-8 — prevents CP1252 garbling on Windows
     level="DEBUG",
 )
 
@@ -169,17 +213,22 @@ if __name__ == "__main__":
     # Preflight setup check — runs scripts/check_setup.py as a
     # subprocess so its colored / Markdown output stays isolated from
     # the bot's logger formatting and so users always see actionable
-    # errors BEFORE the orchestrator's async startup churn. Non-zero
-    # exit aborts the launch cleanly with a single reminder.
-    rc = subprocess.call(
-        [sys.executable, str(PREFLIGHT_SCRIPT), *sys.argv[1:]],
-        cwd=str(PROJECT_ROOT),
-    )
-    if rc != 0:
-        sys.exit(
-            "Genesis preflight failed — see output above. "
-            "Re-run `python scripts/check_setup.py` once issues are fixed."
+    # errors BEFORE the orchestrator's async startup churn.
+    #
+    # When launched from the GUI (GENESIS_LAUNCHED_BY=gui), the
+    # launcher already ran preflight — skip the duplicate to shave
+    # ~2 seconds off the 5-second target.
+    _launched_by_gui = os.environ.get("GENESIS_LAUNCHED_BY") == "gui"
+    if not _launched_by_gui:
+        rc = subprocess.call(
+            [sys.executable, str(PREFLIGHT_SCRIPT), *sys.argv[1:]],
+            cwd=str(PROJECT_ROOT),
         )
+        if rc != 0:
+            sys.exit(
+                "Genesis preflight failed — see output above. "
+                "Re-run `python scripts/check_setup.py` once issues are fixed."
+            )
 
     # Single highlighted startup block. The dashboard URL appears here,
     # *before* any other output, so the user never scrapes the log for

@@ -10,6 +10,15 @@ from bot.config.settings import settings, TradeDirection
 from bot.core.mt5_connector import _explain_mt5_error
 
 
+# ── Spread Safety Guards ───────────────────────────────────────────────
+# Prevents SL/TP placement inside the Bid/Ask spread gap, which would
+# cause immediate stop-outs on MT5 — especially critical for SELL trades
+# where the Stop Loss triggers on the higher Ask price.
+# The buffer multiplier is applied to the current spread so that valid
+# stops are never rejected by the broker while dangerous ones are caught.
+SPREAD_GUARD_MULTIPLIER = 2.0  # Buffer = spread × this multiplier
+
+
 class OrderManager:
     """Manages trade execution, modification, and closing through MT5."""
 
@@ -36,6 +45,77 @@ class OrderManager:
         self._executor = executor
 
     # ── Execution helpers ────────────────────────────────────────────
+
+    @staticmethod
+    def _verify_sl_spread_guard(
+        side_buy: bool,
+        entry_price: float,
+        sl: float,
+        tick,
+        symbol_info,
+    ) -> tuple[bool, float]:
+        """Ensure the requested Stop Loss is safely outside the Bid/Ask spread.
+
+        MT5 triggers SL orders on the market price: SELL SL triggers on Ask,
+        BUY SL triggers on Bid.  If the SL is placed *inside* the current
+        spread gap, the broker may execute an instant stop-out at a loss —
+        the exact bug that consumed real balance on heavy-volume positions.
+
+        This guard validates and, if necessary, widens the SL so it sits
+        safely outside the spread:
+
+            SELL:  SL must be ≥ entry_price + spread × SPREAD_GUARD_MULTIPLIER
+            BUY:   SL must be ≤ entry_price − spread × SPREAD_GUARD_MULTIPLIER
+
+        For SL modifications on already-open positions (trailing stop), the
+        same check uses the open price as the reference.
+
+        Args:
+            side_buy: True for BUY, False for SELL.
+            entry_price: The position's entry price (or open price for mods).
+            sl: The requested stop-loss price.
+            tick: MT5 tick object with .bid and .ask attributes.
+            symbol_info: MT5 symbol_info for the symbol.
+
+        Returns:
+            Tuple of (valid, adjusted_sl).  ``valid`` is False when the SL
+            cannot be safely placed (reject), ``adjusted_sl`` is the widened
+            SL when a correction was applied (``valid`` stays True).
+        """
+        spread = (tick.ask - tick.bid) if tick else 0.0
+        if spread <= 0 or sl is None or sl == 0:
+            return True, sl  # No spread → no guard needed; or SL not set
+
+        spread_buffer = spread * SPREAD_GUARD_MULTIPLIER
+        digits = getattr(symbol_info, "digits", 5)
+
+        if side_buy:
+            # BUY: SL triggers on Bid.  SL must be below entry by at least
+            # the spread buffer, otherwise a sudden bid-ask widening could
+            # brush the SL.
+            max_allowed_sl = round(entry_price - spread_buffer, digits)
+            if sl > max_allowed_sl:
+                adjusted = max_allowed_sl
+                logger.warning(
+                    f"🔒 SPREAD GUARD: BUY SL {sl:.{digits}f} inside spread gap "
+                    f"(buffer={spread_buffer:.{digits}f}, entry={entry_price:.{digits}f}). "
+                    f"Widened to {adjusted:.{digits}f}."
+                )
+                return True, adjusted
+        else:
+            # SELL: SL triggers on Ask.  SL must be above entry by at least
+            # the spread buffer, or the Ask gap could trigger it immediately.
+            min_allowed_sl = round(entry_price + spread_buffer, digits)
+            if sl < min_allowed_sl:
+                adjusted = min_allowed_sl
+                logger.warning(
+                    f"🔒 SPREAD GUARD: SELL SL {sl:.{digits}f} inside spread gap "
+                    f"(buffer={spread_buffer:.{digits}f}, entry={entry_price:.{digits}f}). "
+                    f"Widened to {adjusted:.{digits}f}."
+                )
+                return True, adjusted
+
+        return True, sl
 
     @staticmethod
     def _choose_filling(symbol_info) -> int:
@@ -140,6 +220,26 @@ class OrderManager:
             order_type == mt5.ORDER_TYPE_BUY, price, sl, tp, symbol_info
         )
 
+        # ── Spread guard: ensure SL sits safely outside the Bid/Ask gap ─
+        # Without this, a SL placed inside the spread causes an instant
+        # market stop-out — especially deadly for SELL trades where SL
+        # triggers on the higher Ask price.
+        if sl is not None and sl > 0:
+            valid, sl = self._verify_sl_spread_guard(
+                side_buy=(order_type == mt5.ORDER_TYPE_BUY),
+                entry_price=price,
+                sl=sl,
+                tick=tick,
+                symbol_info=symbol_info,
+            )
+            if not valid:
+                logger.error(
+                    f"❌ SPREAD GUARD REJECTED {symbol} {direction.value}: "
+                    f"SL {sl:.{symbol_info.digits}f} cannot be safely placed "
+                    f"outside the spread gap."
+                )
+                return None
+
         volume = self._normalize_volume(volume, symbol_info)
 
         request = {
@@ -228,11 +328,30 @@ class OrderManager:
             logger.error(f"❌ Symbol info not found for {pos.symbol}")
             return False
 
+        # ── Spread guard: ensure modified SL is safely outside the Bid/Ask gap ─
+        new_sl = sl if sl is not None else pos.sl
+        if new_sl > 0:
+            tick = await self._executor.submit(mt5.symbol_info_tick, pos.symbol)
+            if tick:
+                valid, new_sl = self._verify_sl_spread_guard(
+                    side_buy=(pos.type == mt5.ORDER_TYPE_BUY),
+                    entry_price=pos.price_open,
+                    sl=new_sl,
+                    tick=tick,
+                    symbol_info=symbol_info,
+                )
+                if not valid:
+                    logger.error(
+                        f"❌ SPREAD GUARD REJECTED modify T{ticket}: "
+                        f"SL {new_sl:.{symbol_info.digits}f} cannot be safely placed."
+                    )
+                    return False
+
         request = {
             "action": mt5.TRADE_ACTION_SLTP,
             "position": int(ticket),
             "symbol": str(pos.symbol),
-            "sl": float(round(sl if sl is not None else pos.sl, symbol_info.digits)),
+            "sl": float(round(new_sl, symbol_info.digits)),
             "tp": float(round(tp if tp is not None else pos.tp, symbol_info.digits)),
         }
 
@@ -284,11 +403,19 @@ class OrderManager:
                 new_sl = potential_sl
 
         if new_sl is not None:
-            return await self._apply_trailing_stop(ticket, new_sl, pos.symbol, pos.tp)
+            # Pass side_buy and entry_price from the already-fetched position
+            # to avoid an extra MT5 fetch in _apply_trailing_stop's spread guard.
+            side_buy = (pos.type == mt5.ORDER_TYPE_BUY)
+            return await self._apply_trailing_stop(
+                ticket, new_sl, pos.symbol, pos.tp,
+                side_buy=side_buy, entry_price=pos.price_open,
+            )
         return False
 
     async def _apply_trailing_stop(
-        self, ticket: int, new_sl: float, symbol: str, existing_tp: float = 0.0
+        self, ticket: int, new_sl: float, symbol: str, existing_tp: float = 0.0,
+        side_buy: Optional[bool] = None,
+        entry_price: Optional[float] = None,
     ) -> bool:
         """
         Low-level MT5 write for a computed trailing-stop SL.
@@ -296,10 +423,53 @@ class OrderManager:
         It exists so callers (e.g. the orchestrator) can acquire their own
         asyncio.Lock, compute new_sl outside it, then call this inside the lock
         for the ~1ms mt5.order_send without holding the lock during compute.
+
+        Args:
+            ticket: MT5 position ticket.
+            new_sl: The computed stop-loss price.
+            symbol: Trading symbol.
+            existing_tp: Current take-profit price (0 = leave unchanged).
+            side_buy: True for BUY, False for SELL. Pass this from the
+                caller to avoid an extra MT5 ``positions_get`` call for the
+                spread guard. If omitted, the method fetches the position
+                itself (slightly slower).
+            entry_price: The original entry/open price. Pass from the
+                caller to avoid an extra MT5 fetch. Required if
+                ``side_buy`` is provided.
         """
         symbol_info = await self._executor.submit(mt5.symbol_info, symbol)
         if symbol_info is None:
             return False
+
+        # ── Spread guard: ensure trailing SL is safely outside the Bid/Ask gap ─
+        if new_sl > 0:
+            # Fetch position info if caller didn't provide it
+            if side_buy is None or entry_price is None:
+                pos_raw = await self._executor.submit(mt5.positions_get, ticket=ticket)
+                if pos_raw is not None and len(pos_raw) > 0:
+                    side_buy = (pos_raw[0].type == mt5.ORDER_TYPE_BUY)
+                    entry_price = pos_raw[0].price_open
+                else:
+                    logger.warning(f"⚠️ SPREAD GUARD: Cannot fetch position {ticket} for trail")
+                    side_buy = None
+
+            if side_buy is not None and entry_price is not None and entry_price > 0:
+                tick = await self._executor.submit(mt5.symbol_info_tick, symbol)
+                if tick:
+                    valid, adj_sl = self._verify_sl_spread_guard(
+                        side_buy=side_buy,
+                        entry_price=entry_price,
+                        sl=new_sl,
+                        tick=tick,
+                        symbol_info=symbol_info,
+                    )
+                    if not valid:
+                        logger.error(
+                            f"❌ SPREAD GUARD REJECTED trail T{ticket} ({symbol}): "
+                            f"SL {new_sl:.{symbol_info.digits}f} cannot be safely placed."
+                        )
+                        return False
+                    new_sl = adj_sl
 
         request = {
             "action": mt5.TRADE_ACTION_SLTP,

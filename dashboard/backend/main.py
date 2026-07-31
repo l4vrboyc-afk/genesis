@@ -18,7 +18,7 @@ def create_app(orchestrator) -> FastAPI:
 
     app = FastAPI(
         title="Genesis Trading Bot Dashboard API",
-        version="1.2.0",
+        version="2.1.0",
         docs_url="/docs",
     )
 
@@ -45,8 +45,27 @@ def create_app(orchestrator) -> FastAPI:
         allow_headers=["*"],
     )
 
+    # ── Ultra-fast health probe (always first, no deps) ──────────
+    # This endpoint is hit by the launcher's port-polling loop.  It
+    # must return 200 immediately, before any route module is imported.
+    @app.get("/api/health")
+    async def health():
+        return {"status": "ok", "started": True}
+
+    # ── Launcher Info (lightweight, no route-module imports) ─────
+    @app.get("/api/launcher-info")
+    async def launcher_info():
+        import os as _os
+        return {
+            "launched_by_gui": _os.environ.get("GENESIS_LAUNCHED_BY") == "gui",
+            "profile": _os.environ.get("GENESIS_PROFILE"),
+            "picker_url": _os.environ.get("GENESIS_PICKER_URL"),
+        }
+
     # ── Route modules (each alias is unique — no collision) ─────────
+    # Imported after the bare health endpoint so the port binds fast.
     from .routes.status import register_routes as _reg_status
+    from .routes.candles import register_routes as _reg_candles
     from .routes.trades import register_routes as _reg_trades
     from .routes.performance import register_routes as _reg_perf
     from .routes.news import register_routes as _reg_news
@@ -54,8 +73,14 @@ def create_app(orchestrator) -> FastAPI:
     from .routes.control import register_routes as _reg_control
     from .routes.settings import register_routes as _reg_settings
     from .routes.copilot import register_routes as _reg_copilot
+    from .routes.metrics import register_routes as _reg_metrics
+    from .routes.logs import register_routes as _reg_logs
+    from .routes.ws_feed import register_routes as _reg_ws_feed
+    from .routes.profile import register_routes as _reg_profile
+    from .routes.override import register_routes as _reg_override
 
     _reg_status(app)
+    _reg_candles(app)
     _reg_trades(app)
     _reg_perf(app)
     _reg_news(app)
@@ -63,17 +88,11 @@ def create_app(orchestrator) -> FastAPI:
     _reg_control(app)
     _reg_settings(app)
     _reg_copilot(app)
-
-    # ── Launcher Info ──────────────────────────────────────────────
-    @app.get("/api/launcher-info")
-    async def launcher_info():
-        """Return launcher environment if the bot was started from the GUI."""
-        import os as _os
-        return {
-            "launched_by_gui": _os.environ.get("GENESIS_LAUNCHED_BY") == "gui",
-            "profile": _os.environ.get("GENESIS_PROFILE"),
-            "picker_url": _os.environ.get("GENESIS_PICKER_URL"),
-        }
+    _reg_metrics(app)
+    _reg_logs(app)
+    _reg_ws_feed(app)
+    _reg_profile(app)
+    _reg_override(app)
 
     # ── Static File Mounting ────────────────────────────────────────
 

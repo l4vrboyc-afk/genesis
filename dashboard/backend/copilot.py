@@ -43,6 +43,9 @@ DEFAULT_MAX_LOG_LINES = 200
 DEFAULT_OUTPUT_TOKENS = 1500
 DEFAULT_INPUT_LIMIT = 4000
 
+# Rate limiting defaults
+DEFAULT_RATE_LIMIT_SECS = 10  # Minimum seconds between copilot requests
+
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 
@@ -161,6 +164,11 @@ class Copilot:
         self._api_key_present = _masked_key_tail() is not None
         self._client = None
         self._client_lock = asyncio.Lock()
+
+        # Rate limiting state
+        self._rate_limit_secs = float(os.environ.get("COPILOT_RATE_LIMIT_SECS", DEFAULT_RATE_LIMIT_SECS))
+        self._last_request_time = 0.0
+        self._rate_limit_lock = asyncio.Lock()
 
     # ── Status / availability ────────────────────────────────────
 
@@ -358,6 +366,44 @@ class Copilot:
                 dedup.append(c)
         return text, dedup
 
+    # ── Rate Limiting ─────────────────────────────────────────
+
+    async def _check_rate_limit(self) -> Optional[tuple]:
+        """Return ``(message, retry_seconds)`` if the user is sending requests too
+        fast, else ``None``.
+
+        Exposing the numeric ``retry_seconds`` (rather than only a human string)
+        lets the dashboard render a precise countdown instead of regex-parsing
+        the message text.
+        """
+        if self._rate_limit_secs <= 0:
+            return None  # Rate limiting disabled
+        async with self._rate_limit_lock:
+            now = asyncio.get_running_loop().time()
+            elapsed = now - self._last_request_time
+            if elapsed < self._rate_limit_secs:
+                remaining = self._rate_limit_secs - elapsed
+                return (
+                    f"Rate limit: wait {round(remaining, 1)}s before sending another question",
+                    round(remaining, 1),
+                )
+            self._last_request_time = now
+        return None
+
+    @property
+    def rate_limit_remaining(self) -> float:
+        """Seconds remaining until the next request is allowed (0 if ready)."""
+        if self._rate_limit_secs <= 0:
+            return 0.0
+        try:
+            loop = asyncio.get_running_loop()
+            now = loop.time()
+            elapsed = now - self._last_request_time
+            remaining = max(0.0, round(self._rate_limit_secs - elapsed, 1))
+            return remaining if remaining > 0 else 0.0
+        except RuntimeError:
+            return 0.0  # No running loop — reset state
+
     # ── Public API ───────────────────────────────────────────────
 
     async def ask(self, prompt: str, scope: Optional[str] = None) -> Dict[str, Any]:
@@ -371,6 +417,15 @@ class Copilot:
             return {
                 "error": f"prompt exceeds {self.INPUT_LIMIT} chars",
                 "enabled": self.is_available(),
+            }
+        # Rate limit check
+        rate_error = await self._check_rate_limit()
+        if rate_error is not None:
+            return {
+                "error": rate_error[0],
+                "enabled": True,
+                "rate_limited": True,
+                "retry_seconds": rate_error[1],
             }
         ctx = await self.build_context(scope=scope)
         system_prompt = self._build_system_prompt(ctx)
@@ -391,6 +446,7 @@ class Copilot:
         + citations. Real incremental streaming is a future patch; the SSE
         consumer on the dashboard degrades gracefully to a single frame.
         """
+        # Rate limit check happens in ask() - if rate limited, returns error
         result = await self.ask(prompt, scope=scope)
         if "answer" in result:
             yield {
@@ -398,6 +454,14 @@ class Copilot:
                 "answer": result["answer"],
                 "citations": result.get("citations", []),
                 "enabled": True,
+            }
+        elif "rate_limited" in result:
+            yield {
+                "type": "error",
+                "content": result.get("error", "Rate limited"),
+                "enabled": True,
+                "rate_limited": True,
+                "retry_seconds": result.get("retry_seconds", self.rate_limit_remaining),
             }
         else:
             yield {

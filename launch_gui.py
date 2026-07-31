@@ -107,27 +107,35 @@ PROFILE_CONFIG: dict[str, dict] = {
         "label": "Swing Trader",
         "category": "Default",
         "description": (
-            "H4/M15 Institutional Swing Matrix. Deep regime hysteresis, strict currency exposure caps, and wide ATR bands for catching multi-day trends."
+            "H4/M15 Institutional Swing Matrix with ATR trailing stops for "
+            "multi-day trends on FX & Commodities. 17 pairs including XAUUSD (Gold) "
+            "for diversified commodity exposure. Wide 2.5x ATR stops, "
+            "5x TP targets, 4-hour losing-streak cooldown. Built for operators "
+            "who check the bot once or twice a day."
         ),
-        "timeframes": "H4 / M15",
+        "timeframes": "H4 / H1",
         "max_positions": 3,
         "max_risk": "1.0%",
-        "rr_ratio": "2.0",
+        "rr_ratio": "2.5",
         "news_filter": True,
         "session_aware": True,
         "currency_exposure_cap": 3,
     },
     "scalper": {
         "port": 8001,
-        "label": "Fast Scalper",
+        "label": "Range Fade Scalper",
         "category": "Scalper",
         "description": (
-            "M15/M1 High-Frequency Volatility Engine. Micro-regime tracking, volume-surge entry gates, tight equity-floor kill switch, and strict exposure limits."
+            "M15/M1 Mean-Reversion Engine. 17 tight-range pairs across FX "
+            "including XAUUSD (Gold) for high-volatility channel fades. "
+            "RSI fade at band edges, 0.8x ATR tight stops, 1.0x volume gate. "
+            "High-frequency, micro-risk scalping across the quietest pairs "
+            "and Gold channel fades."
         ),
         "timeframes": "M15 / M1",
-        "max_positions": 5,
+        "max_positions": 4,
         "max_risk": "0.5%",
-        "rr_ratio": "1.0",
+        "rr_ratio": "1.2",
         "news_filter": True,
         "session_aware": True,
         "currency_exposure_cap": 1,
@@ -137,26 +145,31 @@ PROFILE_CONFIG: dict[str, dict] = {
         "label": "Breakout Hunter",
         "category": "Breakout",
         "description": (
-            "H1/M15 Kinetic Breakout System. Volatility-spike detection, volume surge gating, and dynamic ATR scaling to capture explosive momentum phases."
+            "H1/M15 Kinetic Breakout System. 18 high-ATR pairs including XAUUSD (Gold) "
+            "for explosive volatility expansion. ADX gate 28+, 1.8x volume surge "
+            "confirmation, 1.8x ATR stop / 4x TP. Only fires on genuine institutional "
+            "momentum across FX and Gold expansion windows."
         ),
         "timeframes": "H1 / M15",
-        "max_positions": 2,
+        "max_positions": 3,
         "max_risk": "1.5%",
-        "rr_ratio": "1.5",
+        "rr_ratio": "3.0",
         "news_filter": True,
         "session_aware": True,
         "currency_exposure_cap": 2,
     },
     "daytrader": {
         "port": 8003,
-        "label": "Day Trader",
+        "label": "Universal Day Trader",
         "category": "Advanced",
         "description": (
-            "3×14 matrix: Trend Engine + Mean Reversion + Breakout across 14 pairs. "
-            "Session-aware, currency exposure capped, daily loss circuit breaker."
+            "3-strategy matrix across 23 FX & Metal pairs including XAUUSD (Gold). "
+            "TrendEngine fires during London/NY, MeanReversion during Asian "
+            "quiet hours, SessionBreakout at open windows. Session-aware routing. "
+            "Balanced 1.5x ATR stops, 3x TP, 4 concurrent positions max."
         ),
         "timeframes": "H1 / M15",
-        "max_positions": 3,
+        "max_positions": 4,
         "max_risk": "1.0%",
         "rr_ratio": "2.0",
         "news_filter": True,
@@ -231,7 +244,8 @@ def _port_available(host: str, port: int) -> bool:
 
 
 # ===== Port-readiness polling ==================================================
-def _port_listening(port: int, host: str = "127.0.0.1", timeout: float = 0.6) -> bool:
+def _port_listening(port: int, host: str = "127.0.0.1", timeout: float = 0.3) -> bool:
+    """Quick TCP connect check — low timeout for fast polling."""
     try:
         with socket.create_connection((host, port), timeout=timeout):
             return True
@@ -240,12 +254,16 @@ def _port_listening(port: int, host: str = "127.0.0.1", timeout: float = 0.6) ->
 
 
 def _wait_for_port(port: int, deadline_sec: float = 60.0) -> bool:
-    """Block until TCP connect to 127.0.0.1:port succeeds or the deadline elapses."""
+    """Block until TCP connect to 127.0.0.1:port succeeds or the deadline elapses.
+
+    Polls aggressively every 100ms so that a fast-booting dashboard
+    (sub-5-second launch) is detected almost immediately.
+    """
     end = time.monotonic() + deadline_sec
     while time.monotonic() < end:
         if _port_listening(port):
             return True
-        time.sleep(0.3)
+        time.sleep(0.1)
     return False
 
 
@@ -610,14 +628,18 @@ class GUIController:
         # Tear down the previous bot (if any)
         self._kill_bot()
 
-        # Re-run preflight on every launch
-        _log("running preflight...")
-        rc, output = _run_preflight()
-        if rc != 0:
-            _log(f"preflight FAILED rc={rc}")
-            self._report_error(f"Preflight check failed (rc={rc}). Details: {output[-500:]}")
+        # Fast preflight: when launched from the GUI, the initial
+        # preflight already ran at startup (in main()).  Only check
+        # the bare essentials here — port availability was already
+        # verified in select_profile(), so skip the full check_setup
+        # subprocess to save ~2 seconds.
+        _log("preflight: fast port-confirm (full check already ran at GUI start)")
+        # Verify port is still free (kill_bot below frees it)
+        if not _port_available(conn_host, port):
+            _log(f"preflight: port {port} still busy after kill")
+            self._report_error(f"Port {port} is still in use after stopping the previous bot. Wait a few seconds and try again.")
             return
-        _log("preflight OK")
+        _log("preflight OK (fast)")
 
         # Spawn with GENESIS_PROFILE in the child env
         stderr_log = PROJECT_ROOT / "logs" / "launcher.log"
@@ -630,7 +652,10 @@ class GUIController:
             self._report_error(str(exc))
             return
 
-        timeout_secs = BotSettings().dashboard_startup_timeout_secs
+        # Aggressive deadline: dashboard must bind within 10 s for the
+        # 5-second UX target.  The BotSettings default of 120 s is kept
+        # as a fallback for CLI-only / edge-case runs.
+        timeout_secs = min(BotSettings().dashboard_startup_timeout_secs, 10)
         _log(f"waiting for port {conn_host}:{port} ({timeout_secs}s deadline)...")
         if not _wait_for_port(port, deadline_sec=timeout_secs):
             _log("PORT WAIT TIMED OUT")
@@ -894,7 +919,7 @@ def main() -> int:
     """
     # --version flag (must run before any side effects) ----------------------
     if "--version" in sys.argv:
-        __version__ = "1.0.0"
+        __version__ = "2.1.0"
         ver_str = f"Genesis Launcher {__version__}"
         print(ver_str)
         # When built as console=False (windowed exe), stdout goes nowhere.

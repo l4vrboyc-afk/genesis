@@ -91,6 +91,7 @@ class DiscordBot(commands.Bot):
                     "alert": (self._send_alert_embed, payload),
                     "daily_summary": (self._send_daily_summary_embed, payload.get("data", {})),
                     "custom": (self._send_custom_embed, payload),
+                    "regime_change": (self._send_regime_change_embed, payload.get("data", {})),
                 }
                 entry = send_map.get(payload["type"])
                 if entry is not None:
@@ -210,6 +211,21 @@ class DiscordBot(commands.Bot):
         embed.add_field(name="Max Drawdown", value=f"`{data.get('max_drawdown', 0.0)*100:.2f}%`", inline=True)
         embed.add_field(name="Streak", value=f"{data.get('streak', {}).get('count', 0)} {data.get('streak', {}).get('type', 'none')}", inline=True)
         
+        embed.set_footer(text=settings.bot_name)
+        await channel.send(embed=embed)
+
+    async def _send_regime_change_embed(self, channel, data: dict):
+        """Send regime-change notification embed."""
+        old_r = data.get("old_regime", "?").upper()
+        new_r = data.get("new_regime", "?").upper()
+        embed = discord.Embed(
+            title="🔄 Market Regime Change",
+            description=f"**{old_r}** → **{new_r}**",
+            color=0x9b59b6,  # Purple
+            timestamp=datetime.now(),
+        )
+        embed.add_field(name="ADX", value=f"`{data.get('adx', '—')}`", inline=True)
+        embed.add_field(name="ATR Ratio", value=f"`{data.get('atr_ratio', '—')}`", inline=True)
         embed.set_footer(text=settings.bot_name)
         await channel.send(embed=embed)
 

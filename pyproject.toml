@@ -67,10 +67,19 @@ dev = [
     "mypy>=1.5.0",
     "coverage>=7.3.0",
     "pytest-cov>=4.1.0",
+    "pre-commit>=4.0.0",
 ]
 # Convenience recipe — full project plus the dev tree.
 # Install with `pip install -e .[all]` (PEP 621 chained extras).
+# Convenience recipe — full project plus the dev tree.
 all = ["genesis-trading-bot[dev]"]
+# macOS / Linux dashboard-only recipe — strips the Windows-only MetaTrader5
+# dependency so the dashboard can run on non-Windows hosts. This group exists
+# so ``pip install -e '.[mac-linux]'`` on a non-Windows host skips the
+# MetaTrader5 wheel (which only ships a Windows binary). On Windows this
+# extra is a no-op; install ``-e .`` instead to get MetaTrader5.
+# See docs/SETUP.md § 2 for Wine / Parallels / VPS alternatives.
+mac-linux = []
 
 [project.urls]
 "Homepage" = "https://github.com/<your-repo>/genesis"

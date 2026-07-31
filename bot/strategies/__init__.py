@@ -13,6 +13,7 @@ from bot.strategies.base_strategy import BaseStrategy, TradeSignal
 from bot.strategies.smart_trend import SmartTrendStrategy
 from bot.strategies.mean_reversion import MeanReversionStrategy
 from bot.strategies.strategy_selector import StrategySelector
+from bot.strategies.strategy_engine import StrategyEngine
 
 # ── Profile-gated imports (Track d) ─────────────────────────────────
 _profile = (settings.active_profile or "default").lower()
@@ -25,7 +26,7 @@ elif _profile == "breakout":
 __all__ = [
     "BaseStrategy", "TradeSignal",
     "SmartTrendStrategy", "MeanReversionStrategy",
-    "StrategySelector",
+    "StrategySelector", "StrategyEngine",
 ]
 
 # Populate __all__ based on the active profile so ``from

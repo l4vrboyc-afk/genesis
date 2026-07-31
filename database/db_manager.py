@@ -51,6 +51,8 @@ class DatabaseManager:
                 migration_stmts = [
                     "ALTER TABLE trade_logs ADD COLUMN entry_comment VARCHAR(200)",
                     "ALTER TABLE trade_logs ADD COLUMN close_comment VARCHAR(200)",
+                    "ALTER TABLE trade_logs ADD COLUMN position_value_usd FLOAT DEFAULT 0.0",
+                    "ALTER TABLE trade_logs ADD COLUMN return_r FLOAT DEFAULT 0.0",
                 ]
                 for stmt in migration_stmts:
                     try:
@@ -65,6 +67,70 @@ class DatabaseManager:
             raise e
 
     # ── Trade Logging ────────────────────────────────────────────────
+
+    async def record_trade_complete(
+        self,
+        ticket: int,
+        symbol: str,
+        direction: str,
+        volume: float,
+        entry_price: float,
+        exit_price: float,
+        profit: float,
+        sl: float,
+        tp: float,
+        strategy: str = "",
+        regime: str = "",
+        entry_comment: str = "",
+        close_comment: str = "",
+        swap: float = 0.0,
+        position_value_usd: float = 0.0,
+        return_r: float = 0.0,
+    ) -> Optional[TradeLog]:
+        """Atomically record a completed trade (open + close in one transaction).
+
+        Fix #3: Creates both the open and close record in a single DB
+        transaction, eliminating the orphaned-open-position race that exists
+        with the two-step ``record_trade_open`` + ``record_trade_close``
+        pattern. If the bot crashes after record_trade_open but before
+        record_trade_close, there's no orphan.
+
+        Returns the TradeLog with status='closed'.
+        """
+        async with self.async_session() as session:
+            try:
+                now = datetime.utcnow()
+                trade = TradeLog(
+                    ticket=ticket,
+                    symbol=symbol,
+                    direction=direction.lower(),
+                    volume=volume,
+                    entry_price=entry_price,
+                    exit_price=exit_price,
+                    profit=profit,
+                    swap=swap,
+                    sl=sl,
+                    tp=tp,
+                    strategy=strategy,
+                    market_regime=regime,
+                    entry_comment=entry_comment,
+                    close_comment=close_comment or "Closed",
+                    comment=close_comment or entry_comment or "Closed",
+                    open_time=now,
+                    close_time=now,
+                    status="closed",
+                    position_value_usd=position_value_usd,
+                    return_r=return_r,
+                )
+                session.add(trade)
+                await session.commit()
+                await session.refresh(trade)
+                logger.debug(f"💾 Trade saved atomically: ticket={ticket} (open+closed)")
+                return trade
+            except Exception as e:
+                logger.error(f"❌ Failed to record trade atomically: {e}")
+                await session.rollback()
+                return None
 
     async def record_trade_open(
         self,
@@ -114,6 +180,8 @@ class DatabaseManager:
         profit: float,
         swap: float = 0.0,
         comment: str = "",
+        position_value_usd: Optional[float] = None,
+        return_r: Optional[float] = None,
     ) -> Optional[TradeLog]:
         """Update a trade record when it is closed. Stores `comment` in the
         dedicated close_comment column — entry_comment is preserved as-is."""
@@ -133,6 +201,10 @@ class DatabaseManager:
                 trade.swap = swap
                 trade.close_time = datetime.utcnow()
                 trade.status = "closed"
+                if position_value_usd is not None:
+                    trade.position_value_usd = position_value_usd
+                if return_r is not None:
+                    trade.return_r = return_r
                 if comment:
                     trade.close_comment = comment
                     # Legacy mirror for older UI surfaces; to_dict prefers close_comment anyway.
@@ -229,11 +301,25 @@ class DatabaseManager:
                 return None
 
     async def get_daily_performance_history(self, limit: int = 30) -> List[DailyPerformance]:
-        """Get history of daily performance records."""
+        """Get history of daily performance records, always sorted chronologically (ASC).
+
+        The ORDER BY date ASC is applied at the SQL level. A Python-level sort
+        is added as a belt-and-suspenders guard: if rows were ever inserted
+        out-of-order (e.g. after a clock correction) the chart's cumulative
+        P&L would plot a false dip before recovering — Fix #3.
+        """
         async with self.async_session() as session:
-            stmt = select(DailyPerformance).order_by(DailyPerformance.date).limit(limit)
+            stmt = (
+                select(DailyPerformance)
+                .order_by(DailyPerformance.date)  # ASC — chronological for chart
+                .limit(limit)
+            )
             result = await session.execute(stmt)
-            return list(result.scalars().all())
+            rows = list(result.scalars().all())
+            # Secondary Python sort ensures chronological order even if DB index
+            # returns rows in insertion order (e.g. after back-dated corrections).
+            rows.sort(key=lambda r: r.date)
+            return rows
 
     # ── Bot State Persistence ────────────────────────────────────────
 

@@ -473,8 +473,6 @@ class StrategySelector:
 
         return True
 
-        return True
-
 # ── 5-Gate Evaluator ──────────────────────────────────────────────────
 # All 5 gates are evaluated in a single structured call. Minimum 4/5 must pass.
 # Returns dict with gate names + pass/fail status for logging and WS broadcast.
@@ -486,88 +484,84 @@ class StrategySelector:
 #   4. EMA Stack    — price stacked with EMA50 + EMA200 (HTF)
 #   5. ADX Strength — ADX >= 20 (trend has conviction; fail-open on NaN)
 #
-# NOTE: RSI Momentum gate removed pending entry-TF data alignment --
-# current `etf_data` from get_analyzed_data uses column 'rsi_14' (lowercase)
-# not 'RSI_14'. Gate 5 will be added once column naming is confirmed.
+# NOTE: Gate 5 (ADX Strength) is fully implemented. An earlier RSI
+# Momentum gate was replaced by ADX Strength after entry-TF column
+# naming alignment issues with 'rsi_14' vs 'RSI_14'.
 
-def evaluate_gates(
-    self,
-    signal: TradeSignal,
-    gatekeeper_data: Optional[dict],
-    entry_tf_data: Optional[pd.DataFrame],
-    htf_data: Optional[pd.DataFrame],
-) -> dict:
-    """Evaluate all 5 gates, return pass/fail summary.
-    Args:
-        signal: Proposed trade signal
-        gatekeeper_data: Dict from DataFetcher.get_gatekeeper_indicators()
-            with keys: adx, ema_50, atr, close
-        entry_tf_data: Entry TF DataFrame (M15/M1) from get_analyzed_data()
-        htf_data: Higher TF DataFrame (H4/H1) from get_analyzed_data()
-    Returns:
-        Dict with 'passed', 'total', 'gates' list, and 'allowed' bool
-    """
-    gates = []
-    direction = signal.direction.value  # 'buy' or 'sell'
+    def evaluate_gates(
+        self,
+        signal: TradeSignal,
+        gatekeeper_data: Optional[dict],
+        entry_tf_data: Optional[pd.DataFrame],
+        htf_data: Optional[pd.DataFrame],
+    ) -> dict:
+        """Evaluate all 5 gates, return pass/fail summary.
+        Args:
+            signal: Proposed trade signal
+            gatekeeper_data: Dict from DataFetcher.get_gatekeeper_indicators()
+                with keys: adx, ema_50, atr, close
+            entry_tf_data: Entry TF DataFrame (M15/M1) from get_analyzed_data()
+            htf_data: Higher TF DataFrame (H4/H1) from get_analyzed_data()
+        Returns:
+            Dict with 'passed', 'total', 'gates' list, and 'allowed' bool
+        """
+        gates = []
+        direction = signal.direction.value  # 'buy' or 'sell'
 
-    # ── Gate 1: Gatekeeper (ADX + EMA50 trend guard) ───────────────
-    gk_pass = self.check_gatekeeper(signal.symbol, gatekeeper_data, signal.direction)
-    gates.append({"name": "gatekeeper", "passed": gk_pass})
+        # ── Gate 1: Gatekeeper (ADX + EMA50 trend guard) ───────────────
+        gk_pass = self.check_gatekeeper(signal.symbol, gatekeeper_data, signal.direction)
+        gates.append({"name": "gatekeeper", "passed": gk_pass})
 
-    # ── Gate 2: Sniper (M15 candle pattern) ────────────────────────
-    sniper_pass = self.check_sniper_confirmation(entry_tf_data, signal.direction)
-    gates.append({"name": "sniper", "passed": sniper_pass})
+        # ── Gate 2: Sniper (M15 candle pattern) ────────────────────────
+        sniper_pass = self.check_sniper_confirmation(entry_tf_data, signal.direction)
+        gates.append({"name": "sniper", "passed": sniper_pass})
 
-    # ── Gate 3: Volume (latest bar >= threshold x 20-bar avg) ──────
-    vol_pass = True  # fail-open
-    if entry_tf_data is not None and not entry_tf_data.empty:
-        vol_col = 'tick_volume' if 'tick_volume' in entry_tf_data.columns else 'volume'
-        if vol_col in entry_tf_data.columns:
-            latest_vol = entry_tf_data[vol_col].iloc[-1]
-            # Compute 20-bar average inline
-            vol_avg = entry_tf_data[vol_col].tail(20).mean()
-            if vol_avg > 0 and not pd.isna(latest_vol):
-                threshold = getattr(settings, 'volume_surge_ratio', 1.5)
-                vol_pass = latest_vol >= (threshold * vol_avg)
-    gates.append({"name": "volume", "passed": vol_pass})
+        # ── Gate 3: Volume (latest bar >= threshold x 20-bar avg) ──────
+        vol_pass = True  # fail-open
+        if entry_tf_data is not None and not entry_tf_data.empty:
+            vol_col = 'tick_volume' if 'tick_volume' in entry_tf_data.columns else 'volume'
+            if vol_col in entry_tf_data.columns:
+                latest_vol = entry_tf_data[vol_col].iloc[-1]
+                # Compute 20-bar average inline
+                vol_avg = entry_tf_data[vol_col].tail(20).mean()
+                if vol_avg > 0 and not pd.isna(latest_vol):
+                    threshold = getattr(settings, 'volume_surge_ratio', 1.5)
+                    vol_pass = latest_vol >= (threshold * vol_avg)
+        gates.append({"name": "volume", "passed": vol_pass})
 
-    # ── Gate 4: EMA Alignment (price stacked with EMA50 + EMA200) ──
-    ema_pass = True  # fail-open
-    if htf_data is not None and not htf_data.empty:
-        close = htf_data['close'].iloc[-1]
-        # Find EMA columns (data_fetcher names them ema_{period})
-        ema_cols = [c for c in htf_data.columns if c.startswith('ema_')]
-        if len(ema_cols) >= 2:
-            ema50_col = next((c for c in ema_cols if '50' in c), ema_cols[0])
-            ema200_col = next((c for c in ema_cols if '200' in c), ema_cols[-1])
-            ema50 = htf_data[ema50_col].iloc[-1]
-            ema200 = htf_data[ema200_col].iloc[-1]
-            if not any(pd.isna(v) for v in [close, ema50, ema200]):
-                stacked_bull = close > ema50 > ema200
-                stacked_bear = close < ema50 < ema200
-                ema_pass = stacked_bull or stacked_bear
-    gates.append({"name": "ema_alignment", "passed": ema_pass})
+        # ── Gate 4: EMA Alignment (price stacked with EMA50 + EMA200) ──
+        ema_pass = True  # fail-open
+        if htf_data is not None and not htf_data.empty:
+            close = htf_data['close'].iloc[-1]
+            # Find EMA columns (data_fetcher names them ema_{period})
+            ema_cols = [c for c in htf_data.columns if c.startswith('ema_')]
+            if len(ema_cols) >= 2:
+                ema50_col = next((c for c in ema_cols if '50' in c), ema_cols[0])
+                ema200_col = next((c for c in ema_cols if '200' in c), ema_cols[-1])
+                ema50 = htf_data[ema50_col].iloc[-1]
+                ema200 = htf_data[ema200_col].iloc[-1]
+                if not any(pd.isna(v) for v in [close, ema50, ema200]):
+                    stacked_bull = close > ema50 > ema200
+                    stacked_bear = close < ema50 < ema200
+                    ema_pass = stacked_bull or stacked_bear
+        gates.append({"name": "ema_alignment", "passed": ema_pass})
 
-    # ── Gate 5: ADX Strength (ADX >= 20 = trend has conviction) ────
-    adx_pass = True  # fail-open on NaN/missing
-    adx_val = None
-    if gatekeeper_data is not None:
-        adx_val = gatekeeper_data.get('adx')
-    elif htf_data is not None and not htf_data.empty and 'adx' in htf_data.columns:
-        adx_val = htf_data['adx'].iloc[-1]
-    if adx_val is not None and not pd.isna(adx_val):
-        adx_pass = adx_val >= 20.0
-    gates.append({"name": "adx_strength", "passed": adx_pass})
+        # ── Gate 5: ADX Strength (ADX >= 20 = trend has conviction) ────
+        adx_pass = True  # fail-open on NaN/missing
+        adx_val = None
+        if gatekeeper_data is not None:
+            adx_val = gatekeeper_data.get('adx')
+        if adx_val is None and htf_data is not None and not htf_data.empty and 'adx' in htf_data.columns:
+            adx_val = htf_data['adx'].iloc[-1]
+        if adx_val is not None and not pd.isna(adx_val):
+            adx_pass = adx_val >= 20.0
+        gates.append({"name": "adx_strength", "passed": adx_pass})
 
-    # ── Gate Result ─────────────────────────────────────────────────
-    passed = sum(1 for g in gates if g["passed"])
-    allowed = passed >= 4
-    return {"passed": passed, "total": 5, "gates": gates, "allowed": allowed}
+        # ── Gate Result ─────────────────────────────────────────────────
+        passed = sum(1 for g in gates if g["passed"])
+        allowed = passed >= 4
+        return {"passed": passed, "total": 5, "gates": gates, "allowed": allowed}
 
-
-def _get_session_from_time(self) -> SessionType:
-
-    # For the daytrader profile, evaluate all 3 strategies and return best signal
 
     def _get_session_from_time(self) -> SessionType:
         """Determine current market session based on UTC time."""

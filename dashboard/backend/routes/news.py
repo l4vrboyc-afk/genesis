@@ -29,6 +29,9 @@ async def get_news():
         ):
             await filter_obj.refresh_calendar_async()
 
+        # Fix #7: Determine the news source for the response
+        news_source = getattr(filter_obj, '_last_news_source', 'unknown')
+
         events = filter_obj.get_upcoming_events(hours=168)
         formatted_events = []
         for e in events:
@@ -39,7 +42,7 @@ async def get_news():
             if "name" in e_copy and "event_name" not in e_copy:
                 e_copy["event_name"] = e_copy["name"]
             formatted_events.append(e_copy)
-        return {"events": formatted_events}
+        return {"events": formatted_events, "news_source": news_source}
     except Exception as e:
         logger.error(f"Error in /api/news: {e}")
         raise HTTPException(status_code=500, detail=str(e))

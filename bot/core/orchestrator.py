@@ -11,7 +11,7 @@ import threading
 from datetime import datetime, timedelta, timezone
 import MetaTrader5 as mt5
 from loguru import logger
-from typing import List
+from typing import Any, List, Optional
 
 from bot.config.settings import settings, TradeDirection
 from bot.core.mt5_connector import MT5Connector
@@ -216,6 +216,12 @@ class TradingOrchestrator:
         # next cycle does NOT re-flatten an already-flat portfolio.
         self._was_connected: bool = False
         self._kill_switch_fired: bool = False
+
+        # Visual engine — overlay refresh cadence + sweep cleanup counter
+        self._last_overlay_refresh: Optional[datetime] = None
+        self._overlay_refresh_interval_secs: int = 300  # every 5 minutes
+        self._visual_cycle_count: int = 0
+        self._sweep_cleanup_every_n_cycles: int = 10
 
 
     async def start(self):
@@ -598,6 +604,164 @@ class TradingOrchestrator:
         self._kill_switch_fired = False
         return True
 
+    @staticmethod
+    def _is_m15_data_stale(m15_data: Any, max_age_seconds: int = 15 * 60) -> bool:
+        """Return True when M15 snapshot's last bar is older than one period.
+
+        Stale ATR/EMA/swing values inflate ``profit_atr`` and cause premature
+        Stage 3 (ACCELERATED) escalation. Re-fetch when the last closed bar
+        is older than ``now - 15 minutes``.
+        """
+        if m15_data is None:
+            return True
+        try:
+            if getattr(m15_data, "empty", True):
+                return True
+            last_time = m15_data.index[-1]
+            if hasattr(last_time, "to_pydatetime"):
+                last_time = last_time.to_pydatetime()
+            if isinstance(last_time, datetime):
+                if last_time.tzinfo is None:
+                    last_time = last_time.replace(tzinfo=timezone.utc)
+                now = datetime.now(timezone.utc)
+                return (now - last_time).total_seconds() > max_age_seconds
+        except Exception:
+            return True
+        return True
+
+    async def _maybe_refresh_overlays(self, symbols: list[str]) -> None:
+        """Refresh session-range + equilibrium overlays every ~300 seconds."""
+        now = datetime.now(timezone.utc)
+        if (
+            self._last_overlay_refresh is not None
+            and (now - self._last_overlay_refresh).total_seconds()
+            < self._overlay_refresh_interval_secs
+        ):
+            return
+
+        for symbol in symbols:
+            try:
+                await self._refresh_overlays_for_symbol(symbol)
+            except Exception as e:
+                logger.debug(f"⚠️ Overlay refresh failed for {symbol}: {e}")
+
+        self._last_overlay_refresh = now
+
+    async def _refresh_overlays_for_symbol(self, symbol: str) -> None:
+        """Rebuild session + S/R equilibrium overlays for one symbol."""
+        h1 = await self.fetcher.get_analyzed_data(symbol, "H1", 72)
+        if h1 is None or h1.empty:
+            return
+
+        GenesisVisualEngine.cleanup_overlays(symbol)
+
+        now = datetime.now(timezone.utc)
+        day_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        # Cover Asia → London → NY window (UTC day start → now + small pad)
+        time_start = day_start.timestamp()
+        time_end = (now + timedelta(hours=1)).timestamp()
+
+        # Today's H1 high/low as the session range
+        try:
+            day_start_naive = day_start.replace(tzinfo=None)
+            idx = h1.index
+            if getattr(idx, "tz", None) is not None:
+                mask = idx >= day_start
+            else:
+                mask = idx >= day_start_naive
+            today = h1.loc[mask]
+            if today.empty:
+                today = h1.tail(24)
+            session_high = float(today["high"].max())
+            session_low = float(today["low"].min())
+            if session_high > session_low:
+                GenesisVisualEngine.place_overlay(
+                    symbol=symbol,
+                    overlay_type="session_range",
+                    label="Session Range",
+                    price_high=session_high,
+                    price_low=session_low,
+                    time_start=time_start,
+                    time_end=time_end,
+                    color_type="DodgerBlue",
+                )
+        except Exception as e:
+            logger.debug(f"Session overlay skipped for {symbol}: {e}")
+
+        # Equilibrium bands from swing S/R
+        try:
+            sr = self.fetcher.get_support_resistance(h1)
+            band = None
+            for col in h1.columns:
+                if str(col).startswith("atr_"):
+                    last = h1[col].iloc[-1]
+                    if last is not None and float(last) == float(last) and float(last) > 0:
+                        band = float(last) * 0.15
+                        break
+            if band is None:
+                mid = float(h1["close"].iloc[-1])
+                band = mid * 0.00015
+
+            for level in (sr.get("resistance") or [])[:2]:
+                GenesisVisualEngine.place_overlay(
+                    symbol=symbol,
+                    overlay_type="equilibrium",
+                    label="Resistance",
+                    price_high=float(level) + band,
+                    price_low=float(level) - band,
+                    color_type="Orange",
+                )
+            for level in (sr.get("support") or [])[:2]:
+                GenesisVisualEngine.place_overlay(
+                    symbol=symbol,
+                    overlay_type="equilibrium",
+                    label="Support",
+                    price_high=float(level) + band,
+                    price_low=float(level) - band,
+                    color_type="MediumSeaGreen",
+                )
+        except Exception as e:
+            logger.debug(f"Equilibrium overlay skipped for {symbol}: {e}")
+
+        logger.debug(f"🗏 Overlays refreshed for {symbol}")
+
+    async def _detect_and_draw_sweeps(self, symbols: set) -> None:
+        """Detect H1 liquidity sweeps and pin them on charts for open symbols."""
+        if not symbols:
+            return
+
+        cleanup_now = (
+            self._visual_cycle_count % self._sweep_cleanup_every_n_cycles == 0
+        )
+
+        for symbol in symbols:
+            try:
+                if cleanup_now:
+                    GenesisVisualEngine.cleanup_sweep_pins(symbol)
+
+                h1 = await self.fetcher.get_analyzed_data(symbol, "H1", 80)
+                if h1 is None or h1.empty:
+                    continue
+
+                sweeps = self.fetcher.detect_sweeps(h1, atr_multiplier=1.0, lookback=60)
+                for sweep in sweeps:
+                    direction = (
+                        "bullish" if sweep.get("type") == "sellside" else "bearish"
+                    )
+                    pin_id = GenesisVisualEngine.add_sweep_pin(
+                        symbol=symbol,
+                        level=float(sweep["level"]),
+                        label=str(sweep.get("label") or sweep.get("type") or "Sweep"),
+                        direction=direction,
+                    )
+                    if pin_id:
+                        logger.info(
+                            f"📍 Sweep pin {symbol}: {sweep.get('label')} "
+                            f"@ {sweep['level']:.5f} ({direction})"
+                        )
+            except Exception as e:
+                logger.debug(f"⚠️ Sweep detection failed for {symbol}: {e}")
+
     async def _execute_trading_cycle(self):
         """Executes a single scanning and position management cycle."""
         
@@ -616,6 +780,15 @@ class TradingOrchestrator:
         active_tickets = {p["ticket"] for p in positions}
         self.dynamic_trailing.cleanup(active_tickets)
 
+        self._visual_cycle_count += 1
+
+        # ── Phase 1.5: Session / equilibrium overlay refresh ───────────
+        # Refresh at most every 300s so OBJ_RECTANGLE overlays stay current
+        # without rewriting the IPC file every 15s cycle.
+        await self._maybe_refresh_overlays(
+            symbols=sorted({p["symbol"] for p in positions} | set(settings.trading_pairs))
+        )
+
         # ── Phase 2: Dynamic Multi‑Stage Trailing ──────────────────────
         #   Replaces the old single‑distance breach-only trailing (Phase 1.5
         #   breakeven + Phase 3 simple trailing) with an adaptive mode
@@ -623,15 +796,15 @@ class TradingOrchestrator:
         #
         #       STATIC → BREAKEVEN → STRUCTURE / ATR_DYNAMIC → ACCELERATED
         #
-        #   Each position is evaluated independently; the engine fetches M15
-        #   data once per unique symbol and reuses it across all positions
-        #   on that symbol.
+        #   Each position is evaluated independently. M15 data is re-fetched
+        #   when the cached snapshot is older than one M15 period so ATR /
+        #   EMA / swing values cannot go stale mid-cycle.
         #
         #   The engine also handles spread‑aware breakeven logic that
         #   prevents accidental stop‑outs from the Bid/Ask gap — critical
         #   for SELL trades where SL triggers on the higher Ask price.
 
-        # Fetch M15 trailing data once per unique symbol
+        # Fetch M15 trailing data — cache only while still fresh (< 15m)
         m15_cache: dict[str, Any] = {}
         unique_symbols = {p["symbol"] for p in positions}
         for sym in unique_symbols:
@@ -648,8 +821,21 @@ class TradingOrchestrator:
             if not tick:
                 continue
 
-            # Get cached M15 data for this symbol
-            m15_data = m15_cache.get(pos["symbol"])
+            # Stale-guard: re-fetch M15 if the cached last bar is older than
+            # one M15 period (ATR/EMA/swings would otherwise understate vol
+            # and trigger premature stage escalation).
+            sym = pos["symbol"]
+            m15_data = m15_cache.get(sym)
+            if self._is_m15_data_stale(m15_data):
+                try:
+                    m15_data = await self.fetcher.get_analyzed_data(sym, "M15", 60)
+                    if m15_data is not None and not m15_data.empty:
+                        m15_cache[sym] = m15_data
+                        logger.debug(
+                            f"♻️ Refreshed stale M15 data for {sym} before trailing"
+                        )
+                except Exception as e:
+                    logger.debug(f"⚠️ M15 re-fetch failed for {sym}: {e}")
 
             # Delegate to the dynamic trailing manager
             try:
@@ -661,6 +847,9 @@ class TradingOrchestrator:
                     f"⚠️ Dynamic trailing failed for T{pos['ticket']} "
                     f"({pos['symbol']}): {e}"
                 )
+
+        # ── Phase 2.5: Liquidity sweep pins for open-position symbols ──
+        await self._detect_and_draw_sweeps(unique_symbols)
 
         # Scan for new signals (outside the lock — fetching data is read-only,
         # ordering is its own critical section below)
@@ -745,23 +934,40 @@ class TradingOrchestrator:
                 )
                 continue
 
-            # ── Rule 1: Gatekeeper Trend Guard ────────────────────────
-            # Blocks SELL signals during a strong H1 uptrend (ADX > 25 AND
-            # Price > 50 EMA).  Only applies to SELL signals.
-            if not self.strategy_selector.check_gatekeeper(
-                pair,
-                gk,
-                signal.direction,
-            ):
-                continue
-
-            # ── Rule 3: M15 Sniper Confirmation ──────────────────────
-            # Requires the latest M15 candle to confirm the intended direction
-            # via lower-high/bearish-close (SELL) or higher-low/bullish-close (BUY).
-            if not self.strategy_selector.check_sniper_confirmation(
-                etf_data,
-                signal.direction,
-            ):
+            # ── 5-Gate Evaluator ──────────────────────────────────────
+            # All 5 gates evaluated in one bundled call. ≥4/5 required.
+            #   Gate 1: Gatekeeper  — ADX+EMA50 trend guard (SELL-only)
+            #   Gate 2: Sniper      — M15 candle pattern confirmation
+            #   Gate 3: Volume      — latest bar ≥ 1.5× 20-bar avg
+            #   Gate 4: EMA Stack   — price stacked with EMA50+EMA200
+            #   Gate 5: ADX Strength — ADX ≥ 20 (trend conviction)
+            gate_eval = self.strategy_selector.evaluate_gates(
+                signal, gk, etf_data, htf_data
+            )
+            # Broadcast gate evaluation to dashboard in real-time
+            if _WS_AVAILABLE:
+                try:
+                    await ws_manager.broadcast(WSEventPayload(
+                        event_type="GATE_EVAL",
+                        timestamp=datetime.now(timezone.utc).isoformat(),
+                        data={
+                            "symbol": pair,
+                            "direction": signal.direction.value,
+                            "passed": gate_eval["passed"],
+                            "total": gate_eval["total"],
+                            "allowed": gate_eval["allowed"],
+                            "gates": gate_eval["gates"],
+                        },
+                    ))
+                except Exception as e:
+                    logger.debug(f"WS broadcast (gate_eval) failed: {e}")
+            if not gate_eval["allowed"]:
+                logger.info(
+                    f"🛑 GATES blocked {pair} {signal.direction.value.upper()}: "
+                    f"{gate_eval['passed']}/{gate_eval['total']} passed "
+                    f"(need ≥4) — "
+                    f"{', '.join(g['name'] for g in gate_eval['gates'] if not g['passed'])}"
+                )
                 continue
 
             # ── Rule 2: Minimum SL Floor ───────────────────────────────
@@ -902,6 +1108,65 @@ class TradingOrchestrator:
                 logger.debug(f"VisualEngine: initial draw failed T{trade_result['ticket']}: {e}")
 
 
+    async def _compute_trade_metrics(
+        self,
+        trade,
+        profit: float,
+    ) -> tuple:
+        """Compute position_value_usd and return_r for a closed trade.
+
+        Uses MT5 ``symbol_info`` to resolve contract size, tick value and
+        tick size so the figures are instrument-agnostic (handles JPY pairs,
+        metals, indices, etc.).
+
+        Formulas:
+            position_value_usd = volume * contract_size * entry_price
+            risk_amount        = (|entry_price - sl| / tick_size) * tick_value * volume
+            return_r           = profit / risk_amount  (0 when risk ≈ 0)
+
+        Returns:
+            (position_value_usd, return_r) — both ``0.0`` on any MT5
+            error so the trade is still persisted with safe fallbacks.
+        """
+        try:
+            symbol_info = await self._mt5.submit(mt5.symbol_info, trade.symbol)
+            if symbol_info is None:
+                logger.debug(
+                    f"⚠️ symbol_info unavailable for {trade.symbol} — "
+                    f"metrics defaulted to 0.0"
+                )
+                return 0.0, 0.0
+
+            contract_size = getattr(symbol_info, "trade_contract_size", 100000)
+            tick_value = getattr(symbol_info, "trade_tick_value", 0.0)
+            tick_size = getattr(symbol_info, "trade_tick_size", 0.0)
+
+            # Position notional value (in quote currency; approx USD for
+            # USD-quote pairs — matches the dashboard's "approximate" intent).
+            position_value_usd = round(
+                trade.volume * contract_size * trade.entry_price, 2
+            )
+
+            # R-multiple: realised PnL ÷ initial risk amount in USD.
+            risk_distance = abs(trade.entry_price - trade.sl)
+            if (
+                tick_size > 0
+                and tick_value > 0
+                and risk_distance > 0
+            ):
+                risk_amount = (risk_distance / tick_size) * tick_value * trade.volume
+                return_r = round(profit / risk_amount, 2) if risk_amount > 0 else 0.0
+            else:
+                return_r = 0.0
+
+            return position_value_usd, return_r
+        except Exception as e:
+            logger.debug(
+                f"⚠️ _compute_trade_metrics failed for T{trade.ticket}: {e}"
+            )
+            return 0.0, 0.0
+
+
     def _extract_exit_info(
         self,
         deals,
@@ -1013,13 +1278,17 @@ class TradingOrchestrator:
                     f"DB data is stale — will overwrite with MT5 value."
                 )
 
-            # Update Database
+            # Update Database — compute position value & R-multiple first
+            position_value_usd, return_r = await self._compute_trade_metrics(trade, profit)
+
             updated_trade = await self.db.record_trade_close(
                 ticket=trade.ticket,
                 exit_price=exit_price,
                 profit=profit,
                 swap=swap,
-                comment=close_comment
+                comment=close_comment,
+                position_value_usd=position_value_usd,
+                return_r=return_r,
             )
 
             if updated_trade:
@@ -1036,13 +1305,15 @@ class TradingOrchestrator:
                     GenesisVisualEngine.cleanup_trade_objects(
                         symbol=trade.symbol, ticket=trade.ticket,
                     )
+                    # Erase the OBJ_TREND trail-milestone history too
+                    GenesisVisualEngine.cleanup_trail_milestones(ticket=trade.ticket)
                 except Exception as e:
                     logger.debug(f"VisualEngine: cleanup failed T{trade.ticket}: {e}")
 
-                closed_trades.append((trade, exit_price, profit, swap, close_comment))
+                closed_trades.append((trade, exit_price, profit, swap, close_comment, position_value_usd, return_r))
 
         # Outside the lock — Discord notify (network IO, no MT5 access)
-        for trade, exit_price, profit, swap, comment in closed_trades:
+        for trade, exit_price, profit, swap, comment, pos_val, ret_r in closed_trades:
             await notification_manager.notify_trade_close({
                 "ticket": trade.ticket,
                 "symbol": trade.symbol,
@@ -1052,6 +1323,8 @@ class TradingOrchestrator:
                 "close_price": exit_price,
                 "profit": profit,
                 "comment": comment,
+                "position_value_usd": pos_val,
+                "return_r": ret_r,
             })
 
             # Broadcast trade closed to WebSocket dashboard clients
@@ -1069,6 +1342,8 @@ class TradingOrchestrator:
                                 "entry_price": trade.entry_price,
                                 "exit_price": exit_price,
                                 "profit": profit,
+                                "position_value_usd": pos_val,
+                                "return_r": ret_r,
                             },
                         )
                     )
@@ -1133,7 +1408,7 @@ class TradingOrchestrator:
         active_positions = _raw_positions_to_dicts(active_raw)
         active_tickets = {p["ticket"] for p in active_positions}
 
-        missing_closes = []  # tuples of (ticket, exit, profit, swap, comment)
+        missing_closes = []  # tuples of (ticket, exit, profit, swap, comment, pos_val, ret_r)
         for trade in db_open_trades:
             if trade.ticket in active_tickets:
                 continue
@@ -1172,13 +1447,19 @@ class TradingOrchestrator:
             if close_comment == "Closed":
                 close_comment = "Closed offline"
 
+            # Compute position value & R-multiple for the sync'd close
+            pos_val, ret_r = await self._compute_trade_metrics(trade, profit)
+
             missing_closes.append(
-                (trade.ticket, exit_price, profit, swap, close_comment)
+                (trade.ticket, exit_price, profit, swap, close_comment, pos_val, ret_r)
             )
 
         # ── DB writes outside the executor ───────────────────────────
-        for ticket, exit_price, profit, swap, comment in missing_closes:
-            await self.db.record_trade_close(ticket, exit_price, profit, swap, comment)
+        for ticket, exit_price, profit, swap, comment, pos_val, ret_r in missing_closes:
+            await self.db.record_trade_close(
+                ticket, exit_price, profit, swap, comment,
+                position_value_usd=pos_val, return_r=ret_r,
+            )
 
         # Re-log any active MT5 positions the bot doesn't know about
         for pos in active_positions:
@@ -1199,6 +1480,140 @@ class TradingOrchestrator:
                     regime="ranging",
                     comment=pos["comment"] or "Recovered position",
                 )
+
+    # ── Closed Trade History (MT5 direct fetch) ───────────────────────
+
+    async def get_closed_trade_history(self, count: int = 20) -> List[dict]:
+        """Fetch recent closed trades directly from MT5 deal history.
+
+        Enriches each closed deal with **Position Notional Value**
+        (``position_value_usd``) and the realised **R-multiple**
+        (``return_r``) — the metrics the dashboard's Recent History table
+        now displays alongside raw P&L.
+
+        The deal stream from ``mt5.history_deals_get()`` is grouped by
+        ``position_id`` so that each closed position is reconstructed from
+        its entry (IN) and exit (OUT) legs.  This gives us the entry price
+        and stop-loss needed for the R calculation, which aren't available
+        on the closing deal alone.
+
+        Returns:
+            List of dicts, most-recent-first, each containing:
+            ``ticket``, ``symbol``, ``type``, ``lots``,
+            ``position_value_usd``, ``entry_price``, ``close_price``,
+            ``pnl``, ``return_r``.
+        """
+        history: List[dict] = []
+
+        try:
+            history_from = datetime.now() - timedelta(days=7)
+            history_to = datetime.now() + timedelta(days=1)
+
+            deals = await self._mt5.submit(
+                mt5.history_deals_get,
+                int(history_from.timestamp()),
+                int(history_to.timestamp()),
+            )
+
+            if not deals:
+                return history
+
+            # Group deals by position_id, pairing IN and OUT legs
+            positions: dict = {}
+            for deal in deals:
+                pos_id = getattr(deal, "position_id", None)
+                if pos_id is None:
+                    continue
+                bucket = positions.setdefault(
+                    pos_id, {"in_deal": None, "out_deal": None}
+                )
+                if deal.entry == getattr(mt5, "DEAL_ENTRY_IN", 1):
+                    bucket["in_deal"] = deal
+                elif deal.entry == getattr(mt5, "DEAL_ENTRY_OUT", 2):
+                    bucket["out_deal"] = deal
+
+            # Keep only fully closed positions (both legs present)
+            closed = [
+                p for p in positions.values()
+                if p["in_deal"] and p["out_deal"]
+            ]
+            # Take the most recent ``count`` by deal time
+            closed.sort(
+                key=lambda p: getattr(p["out_deal"], "time", 0),
+                reverse=True,
+            )
+            closed = closed[:count]
+
+            for pos in closed:
+                in_deal = pos["in_deal"]
+                out_deal = pos["out_deal"]
+
+                symbol = out_deal.symbol
+                symbol_info = await self._mt5.submit(mt5.symbol_info, symbol)
+
+                contract_size = (
+                    getattr(symbol_info, "trade_contract_size", 100000)
+                    if symbol_info else 100000
+                )
+                tick_value = (
+                    getattr(symbol_info, "trade_tick_value", 0.0)
+                    if symbol_info else 0.0
+                )
+                tick_size = (
+                    getattr(symbol_info, "trade_tick_size", 0.0)
+                    if symbol_info else 0.0
+                )
+
+                lots = out_deal.volume
+                entry_price = in_deal.price
+                close_price = out_deal.price
+
+                # Position notional value (approximate USD)
+                position_value_usd = round(lots * contract_size * entry_price, 2)
+
+                # Net P&L including commission
+                pnl = round(
+                    out_deal.profit
+                    + (out_deal.swap or 0.0)
+                    + (getattr(out_deal, "commission", 0.0) or 0.0),
+                    2,
+                )
+
+                # R-multiple: PnL / initial risk amount
+                sl = getattr(in_deal, "sl", 0.0) or 0.0
+                risk_distance = abs(entry_price - sl) if sl else 0.0
+                if tick_size > 0 and tick_value > 0 and risk_distance > 0:
+                    risk_amount = (
+                        (risk_distance / tick_size) * tick_value * lots
+                    )
+                    return_r = round(pnl / risk_amount, 2) if risk_amount > 0 else 0.0
+                else:
+                    return_r = 0.0
+
+                # Type: closing deal type is the opposite of the position
+                deal_type = getattr(out_deal, "type", None)
+                trade_type = (
+                    "buy"
+                    if deal_type == getattr(mt5, "DEAL_TYPE_SELL", 1)
+                    else "sell"
+                )
+
+                history.append({
+                    "ticket": out_deal.position_id,
+                    "symbol": symbol,
+                    "type": trade_type,
+                    "lots": lots,
+                    "position_value_usd": position_value_usd,
+                    "entry_price": entry_price,
+                    "close_price": close_price,
+                    "pnl": pnl,
+                    "return_r": return_r,
+                })
+
+        except Exception as e:
+            logger.error(f"Failed to fetch closed trade history from MT5: {e}")
+
+        return history
 
         logger.success("[OK] Position synchronization completed")
 

@@ -405,6 +405,264 @@ class DataFetcher:
             "resistance": sorted(resistances[-5:], reverse=True) if resistances else [],
         }
 
+    def detect_sweeps(
+        self,
+        df: pd.DataFrame,
+        atr_multiplier: float = 1.0,
+        lookback: int = 60,
+    ) -> list[dict]:
+        """Detect liquidity sweeps (SSL / BSL) on OHLC data.
+
+        Scans for swing highs/lows (neighbour window=2, same pattern as
+        the trailing engine's ``_detect_swings``), then checks whether the
+        *next* candle took liquidity beyond the swing by ≥ ``atr_multiplier``
+        × ATR and rejected back inside:
+
+        - **Sellside sweep (SSL):** wick above swing high, close below it
+          → liquidity taken above, bullish rejection.
+        - **Buyside sweep (BSL):** wick below swing low, close above it
+          → liquidity taken below, bearish rejection.
+
+        Args:
+            df: OHLCV DataFrame (preferably with an ``atr_*`` column from
+                ``calculate_indicators``; ATR is computed inline otherwise).
+            atr_multiplier: Minimum wick penetration beyond the swing,
+                expressed in ATR units (default 1.0).
+            lookback: Only consider the last *lookback* bars for sweeps
+                (swing pivots may sit just outside this window).
+
+        Returns:
+            List of dicts with keys ``type`` (``"sellside"`` / ``"buyside"``),
+            ``level``, ``time`` (unix epoch int), ``price``, ``label``.
+        """
+        if df is None or df.empty or len(df) < 5:
+            return []
+
+        work = df.copy()
+        atr_col = f"atr_{settings.atr_period}"
+        if atr_col not in work.columns:
+            atr_vals = ta.atr(
+                work["high"], work["low"], work["close"], length=settings.atr_period
+            )
+            work[atr_col] = (
+                atr_vals if atr_vals is not None
+                else pd.Series(np.nan, index=work.index)
+            )
+
+        highs = work["high"].values
+        lows = work["low"].values
+        closes = work["close"].values
+        atrs = work[atr_col].values
+        n = len(work)
+        window = 2
+
+        # Collect swing pivots with their bar indices (window=2)
+        swing_highs: list[tuple[int, float]] = []
+        swing_lows: list[tuple[int, float]] = []
+        if n >= window * 2 + 1:
+            for i in range(window, n - window):
+                is_high = all(
+                    highs[i] > highs[i - j] for j in range(1, window + 1)
+                ) and all(
+                    highs[i] > highs[i + j] for j in range(1, window + 1)
+                )
+                if is_high:
+                    swing_highs.append((i, float(highs[i])))
+
+                is_low = all(
+                    lows[i] < lows[i - j] for j in range(1, window + 1)
+                ) and all(
+                    lows[i] < lows[i + j] for j in range(1, window + 1)
+                )
+                if is_low:
+                    swing_lows.append((i, float(lows[i])))
+
+        # Restrict confirmation candles to the lookback window
+        start_i = max(0, n - lookback)
+        sweeps: list[dict] = []
+
+        def _bar_time(idx: int) -> int:
+            ts = work.index[idx]
+            try:
+                if hasattr(ts, "timestamp"):
+                    return int(ts.timestamp())
+                return int(pd.Timestamp(ts).timestamp())
+            except Exception:
+                return int(datetime.now().timestamp())
+
+        # Sellside (SSL): next candle wicks ≥1×ATR above swing high, closes below
+        for swing_i, level in swing_highs:
+            conf_i = swing_i + 1
+            if conf_i < start_i or conf_i >= n:
+                continue
+            atr = atrs[conf_i]
+            if atr is None or (isinstance(atr, float) and np.isnan(atr)) or atr <= 0:
+                continue
+            if highs[conf_i] >= level + atr_multiplier * atr and closes[conf_i] < level:
+                sweeps.append({
+                    "type": "sellside",
+                    "level": level,
+                    "time": _bar_time(conf_i),
+                    "price": float(highs[conf_i]),
+                    "label": "SSL Sweep",
+                })
+
+        # Buyside (BSL): next candle wicks ≥1×ATR below swing low, closes above
+        for swing_i, level in swing_lows:
+            conf_i = swing_i + 1
+            if conf_i < start_i or conf_i >= n:
+                continue
+            atr = atrs[conf_i]
+            if atr is None or (isinstance(atr, float) and np.isnan(atr)) or atr <= 0:
+                continue
+            if lows[conf_i] <= level - atr_multiplier * atr and closes[conf_i] > level:
+                sweeps.append({
+                    "type": "buyside",
+                    "level": level,
+                    "time": _bar_time(conf_i),
+                    "price": float(lows[conf_i]),
+                    "label": "BSL Sweep",
+                })
+
+        return sweeps
+
+    # ── Gatekeeper Indicators (Rule 1 & 2) ──────────────────────────
+    # Lightweight dict return — no full-DataFrame or SMC overhead.
+
+    async def get_gatekeeper_indicators(self, symbol: str) -> Optional[dict]:
+        """Fetch ADX, 50-EMA, ATR, and close price on the gatekeeper
+        timeframe for the Gatekeeper Trend Guard (Rule 1) and Minimum
+        SL Floor (Rule 2).
+
+        The timeframe is profile-aware (configured via
+        ``settings.gatekeeper_timeframe``, default H1):
+
+        - **Scalper profile:** M15 — filters short-term pullbacks fast
+          without waiting 60 minutes for an H1 candle to close.
+        - **Default / Breakout / Day Trader:** H1 — intermediate trend
+          direction check.
+
+        Only computes the three needed indicators (ADX, EMA50, ATR) —
+        no EMA200, RSI, volume avg, SMC, or ema_slope.
+
+        Returns:
+            Dict with keys ``adx``, ``ema_50``, ``atr``, ``close``,
+            or None on failure / insufficient data.
+        """
+        if not await self.connector.ensure_connected():
+            return None
+        return await self._executor.submit(
+            self._get_gatekeeper_indicators_sync, symbol
+        )
+
+    def _get_gatekeeper_indicators_sync(self, symbol: str) -> Optional[dict]:
+        """Sync body — fetches candles on the profile-aware gatekeeper
+        timeframe (H1 for default/breakout/daytrader; M15 for scalper)
+        and computes only ADX + EMA50 + ATR."""
+        # Need enough bars to warm up ADX (14) + some margin.
+        count = max(settings.adx_period + 10, 60)
+        df = self._get_candles_sync(
+            symbol, settings.gatekeeper_timeframe, count
+        )
+        if df is None or df.empty:
+            return None
+
+        # 1. ADX
+        adx_df = ta.adx(
+            df["high"], df["low"], df["close"], length=settings.adx_period
+        )
+        adx_val = None
+        if adx_df is not None:
+            col = f"ADX_{settings.adx_period}"
+            if col in adx_df.columns:
+                last = adx_df[col].iloc[-1]
+                adx_val = None if pd.isna(last) else float(last)
+
+        # 2. EMA(50)
+        ema_vals = ta.ema(df["close"], length=settings.gatekeeper_ema_period)
+        ema_50_val = None
+        if ema_vals is not None:
+            last = ema_vals.iloc[-1]
+            ema_50_val = None if pd.isna(last) else float(last)
+
+        # 3. ATR
+        atr_vals = ta.atr(
+            df["high"], df["low"], df["close"], length=settings.atr_period
+        )
+        atr_val = None
+        if atr_vals is not None:
+            last = atr_vals.iloc[-1]
+            atr_val = None if (pd.isna(last) or last <= 0) else float(last)
+
+        # 4. Close price
+        close_val = float(df["close"].iloc[-1])
+
+        logger.debug(
+            f"Gatekeeper indicators for {symbol}: ADX={adx_val}, "
+            f"EMA50={ema_50_val}, ATR={atr_val}, close={close_val}"
+        )
+
+        if adx_val is None and ema_50_val is None:
+            # Both trend indicators missing → unusable
+            logger.warning(
+                f"Gatekeeper indicators unusable for {symbol}: "
+                f"ADX={adx_val}, EMA50={ema_50_val}"
+            )
+            return None
+
+        return {
+            "adx": adx_val,
+            "ema_50": ema_50_val,
+            "atr": atr_val,
+            "close": close_val,
+        }
+
+    # ── Lightweight ATR-only Helper ────────────────────────────────
+
+    async def get_atr(
+        self, symbol: str, timeframe: str, count: int = 50
+    ) -> Optional[float]:
+        """Fetch the latest ATR value for *symbol* on *timeframe* — no EMA,
+        RSI, ADX, or SMC overhead.
+
+        Used by the breakeven and trailing-stop logic in the orchestrator
+        where only volatility magnitude is needed.  Avoids the full indicator
+        pipeline (5× fewer pandas operations per call).
+
+        Args:
+            symbol: Trading pair.
+            timeframe: Timeframe string (e.g. "M15", "H1").
+            count: Number of candles to fetch (must be > ATR period + 1).
+
+        Returns:
+            Latest ATR value, or None on failure / insufficient data.
+        """
+        if not await self.connector.ensure_connected():
+            return None
+        return await self._executor.submit(
+            self._get_atr_sync, symbol, timeframe, count
+        )
+
+    def _get_atr_sync(
+        self, symbol: str, timeframe: str, count: int = 50
+    ) -> Optional[float]:
+        """Sync body — fetches candles and calculates a single ATR value."""
+        df = self._get_candles_sync(symbol, timeframe, count)
+        if df is None or df.empty:
+            return None
+
+        atr_vals = ta.atr(
+            df["high"], df["low"], df["close"], length=settings.atr_period
+        )
+        if atr_vals is None or atr_vals.empty:
+            return None
+
+        latest = atr_vals.iloc[-1]
+        if pd.isna(latest) or latest <= 0:
+            return None
+
+        return float(latest)
+
     # ── Full Data Pipeline ──────────────────────────────────────────
 
     async def get_analyzed_data(

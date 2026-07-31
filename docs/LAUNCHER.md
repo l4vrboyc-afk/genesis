@@ -92,6 +92,43 @@ geometry, splash, profile picker, etc.) can be re-bundled with the same
 command. The Genesis source it spawns (`main.py`) can change freely
 without rebuilding.
 
+## Deploying the rebuilt bundle
+
+After a rebuild, sync the fresh output to the run locations. The repo
+keeps three copies of the bundle that must stay identical:
+
+```powershell
+# 1. The canonical build output (already fresh from PyInstaller)
+#    dist\Genesis\Genesis.exe + dist\Genesis\_internal\
+
+# 2. The run-from-project-root layout (Genesis.exe sits next to main.py)
+#    Close Genesis.exe first if it's running (the exe is locked).
+Copy-Item dist\Genesis\Genesis.exe Genesis.exe -Force
+Remove-Item _internal -Recurse -Force   # remove first so Copy-Item creates a fresh tree
+Copy-Item dist\Genesis\_internal _internal -Recurse -Force
+
+# 3. The self-contained deployment folder
+Copy-Item dist\Genesis\Genesis.exe Genesis\Genesis.exe -Force
+Remove-Item Genesis\_internal -Recurse -Force
+Copy-Item dist\Genesis\_internal Genesis\_internal -Recurse -Force
+```
+
+> **Note:** use `Copy-Item` / `Remove-Item`, not `robocopy /MIR` —
+> `robocopy /MIR` can exit with code 16 ("copied nothing") in some
+> shells, silently leaving stale files in place. Always verify the sync
+> afterwards. Avoid `diff -rq` in PowerShell (it aliases to
+> `Compare-Object`); use `git diff --no-index` instead:
+>
+> ```powershell
+> git diff --no-index --quiet dist\Genesis\_internal _internal
+> git diff --no-index --quiet dist\Genesis\_internal Genesis\_internal
+> ```
+>
+> Both must exit 0 (print nothing). The dashboard frontend
+> (`dashboard/frontend/`) is **not** bundled — it's served live from the
+> project root by the bot, so dashboard-only changes never require a
+> rebuild.
+
 ## Version check
 
 Run `Genesis.exe --version` to print the launcher version. This is useful

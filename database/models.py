@@ -4,6 +4,7 @@ Uses SQLAlchemy for ORM mapping.
 """
 
 from datetime import datetime
+from typing import Optional
 from sqlalchemy import Column, Integer, String, Float, DateTime, Boolean
 from sqlalchemy.orm import DeclarativeBase
 
@@ -11,6 +12,29 @@ from sqlalchemy.orm import DeclarativeBase
 class Base(DeclarativeBase):
     """Base class for all models."""
     pass
+
+
+def calc_position_value_usd(volume: float, symbol: str, price: float) -> float:
+    """Calculate position (notional) value in USD using currency-aware logic.
+
+    - USD as **base** currency (USDJPY, USDCAD, USDCHF): value = volume × 100k
+      (the lot size in USD units, independent of price).
+    - USD as **quote** currency (EURUSD, GBPUSD, AUDUSD): value = volume × 100k × price.
+    - **Cross pairs** (EURGBP, GBPCHF, etc.): value = volume × 100k (base-unit exposure).
+    """
+    if not volume or not symbol:
+        return 0.0
+
+    symbol_clean = symbol.upper()
+    base_curr = symbol_clean[:3]
+    quote_curr = symbol_clean[3:6]
+    lots_to_units = volume * 100000.0
+
+    if base_curr == "USD":
+        return round(lots_to_units, 2)
+    if quote_curr == "USD":
+        return round(lots_to_units * (price or 1.0), 2)
+    return round(lots_to_units, 2)
 
 
 class TradeLog(Base):
@@ -38,9 +62,17 @@ class TradeLog(Base):
     strategy = Column(String(50), nullable=True)
     market_regime = Column(String(30), nullable=True)
     status = Column(String(20), default="open", nullable=False)  # "open", "closed"
+    position_value_usd = Column(Float, default=0.0, nullable=False)
+    return_r = Column(Float, default=0.0, nullable=False)
 
     def to_dict(self) -> dict:
         """Convert model instance to dictionary."""
+        # Backfill position_value_usd for legacy trades (pre-migration rows
+        # have 0.0).  Uses currency-aware calculation based on symbol pair.
+        pos_value = self.position_value_usd
+        if not pos_value or pos_value == 0.0:
+            pos_value = calc_position_value_usd(self.volume, self.symbol, self.entry_price)
+
         return {
             "id": self.id,
             "ticket": self.ticket,
@@ -61,6 +93,8 @@ class TradeLog(Base):
             "strategy": self.strategy,
             "market_regime": self.market_regime,
             "status": self.status,
+            "position_value_usd": pos_value or 0.0,
+            "return_r": self.return_r,
         }
 
 

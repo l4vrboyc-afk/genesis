@@ -104,6 +104,23 @@ class NotificationManager:
         await self._enqueue(payload)
         logger.debug("📢 Queued daily summary notification")
 
+    async def notify_regime_change(
+        self, old_regime: str, new_regime: str, adx: float, atr_ratio: float
+    ):
+        """Send regime-change alert when the strategy selector flips."""
+        payload = {
+            "type": "regime_change",
+            "data": {
+                "old_regime": old_regime,
+                "new_regime": new_regime,
+                "adx": round(adx, 1),
+                "atr_ratio": round(atr_ratio, 2),
+            },
+            "timestamp": datetime.now(),
+        }
+        await self._enqueue(payload)
+        logger.info(f"🔄 Queued regime change notification: {old_regime} → {new_regime}")
+
 
 # Singleton instance
 notification_manager = NotificationManager()

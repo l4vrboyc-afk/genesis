@@ -4,7 +4,7 @@ This module ensures the bot never risks more than it should.
 """
 
 import asyncio
-from collections import deque
+from collections import Counter, deque
 import MetaTrader5 as mt5
 from datetime import datetime, timedelta
 from typing import Any, Optional
@@ -23,7 +23,15 @@ MIN_SL_TICKS = 60
 # raw size to absurd levels, the cap silently absorbs 90%+ of the
 # intended risk, and the resulting trade has a catastrophically degraded
 # risk/reward ratio.
-CAP_MULTIPLIER = 10.0
+CAP_MULTIPLIER = 3.0
+
+# Hard absolute maximum lot size per position.  This is a safety floor
+# that overrides all other sizing logic (broker max, account %, etc.)
+# to prevent catastrophic commission / spread slippage on heavy volume
+# (see the 12–19 lot issue that caused $70–$135+ in broker commissions
+# per position).  Tune this to your account size; 3.0–5.0 is recommended
+# for accounts under $15k.
+MAX_ABSOLUTE_LOT = 5.0
 
 
 class RiskManager:
@@ -52,6 +60,13 @@ class RiskManager:
         self._daily_dd_tripped: bool = False
         self._equity_floor_tripped: bool = False
         self._peak_equity: float = 0.0
+
+        # Track (d) — Kill-switch re-engagement guard (#8)
+        # After a manual release, we track a separate ``_post_release_peak``
+        # so that if equity continues to decline after release, the switch
+        # re-trips immediately from the release baseline (instead of waiting
+        # for a new all-time peak).
+        self._post_release_peak: Optional[float] = None
 
         # Track (d) MT5 thread-safety — when the orchestrator wires the
         # AsyncMt5Executor into us, every native ``mt5.*`` call in this
@@ -222,9 +237,11 @@ class RiskManager:
 
         # Apply lot size safety guardrails (prevent catastrophic sizing)
         # Tighter limits: MAX_LOT should be reasonable for small accounts
-        # Formula: min(broker_max, 1% of account equity, 5 lots)
+        # Formula: min(broker_max, 1% of account equity per position, hard cap)
+        # Fix: Added MAX_ABSOLUTE_LOT = 5.0 as an absolute ceiling to prevent
+        # the 12–19 lot trades that consumed $70–$135+ in broker commissions.
         account_max_lot = settings.starting_capital / 100.0  # $1000 -> max 10 lots
-        MAX_LOT = min(symbol_info.volume_max, account_max_lot, 50.0)
+        MAX_LOT = min(symbol_info.volume_max, account_max_lot, MAX_ABSOLUTE_LOT)
 
         # Guard 2 — reject when the raw lot size dwarfs the cap.
         # If the pre-clamp lot is more than CAP_MULTIPLIER × MAX_LOT the
@@ -450,6 +467,27 @@ class RiskManager:
         if equity > self._peak_equity:
             self._peak_equity = equity
 
+        # Fix #8: Post-release re-engagement guard.
+        # After a manual release, ``_post_release_peak`` holds the equity
+        # at the time of release. If equity continues to drop from that
+        # baseline, we re-trip immediately — no need to wait for a new
+        # all-time peak. The guard is cleared once equity exceeds it.
+        if self._post_release_peak is not None:
+            if equity > self._post_release_peak:
+                self._post_release_peak = None  # Recovered — clear guard
+            else:
+                guard_dd = (self._post_release_peak - equity) / self._post_release_peak
+                if guard_dd >= threshold:
+                    if not self._equity_floor_tripped:
+                        logger.critical(
+                            f"🚨 EQUITY FLOOR RE-TRIPPED (post-release guard): "
+                            f"release baseline ${self._post_release_peak:.2f} → "
+                            f"now ${equity:.2f}; drawdown {guard_dd*100:.1f}% ≥ "
+                            f"{threshold*100:.1f}%"
+                        )
+                    self._equity_floor_tripped = True
+                    return False
+
         if self._peak_equity <= 0:
             return True  # no peak yet, no floor to compare against
 
@@ -492,9 +530,14 @@ class RiskManager:
     def release_equity_floor_trip(self) -> bool:
         """Manually clear the equity-floor kill switch.
 
+        Fix #8: On release, sets a ``_post_release_peak`` independent of
+        ``_peak_equity``. If equity continues to drop after release, the
+        switch re-trips from the release baseline without waiting for a
+        new all-time peak. The ``_post_release_peak`` is cleared once
+        equity exceeds it (normal recovery).
+
         Returns True if a release happened (state changed), False if the
-        switch was already clear. On release the peak is rebaselined to
-        current equity so the next trip requires a fresh drawdown band.
+        switch was already clear.
         """
         if not self._equity_floor_tripped:
             return False
@@ -503,6 +546,8 @@ class RiskManager:
         account = self._mt5_call(mt5.account_info)
         if account:
             self._peak_equity = account.equity
+            # Fix #8: Set post-release guard peak at release baseline
+            self._post_release_peak = account.equity
         return True
 
     # ── Losing Streak Detection ─────────────────────────────────────
@@ -557,8 +602,9 @@ class RiskManager:
     # ── Correlation Filter ──────────────────────────────────────────
 
     # Correlated pair groups — same direction trades on these would double risk.
-    # Track (d): same-group opposite-direction trades also count, because they
-    # net each other out (buy EURUSD + sell GBPUSD in same group is a wash).
+    # Opposite-direction trades in the same group (e.g., buy EURUSD + sell GBPUSD)
+    # are ALLOWED because they HEDGE each other (reduced net exposure), not compound it.
+    # Fix #4: Only same-direction correlated pairs are rejected.
     CORRELATION_GROUPS = [
         {"EURUSD", "GBPUSD", "AUDUSD", "NZDUSD"},     # USD weakness group
         {"USDCHF", "USDCAD", "USDJPY"},                # USD strength group
@@ -570,9 +616,9 @@ class RiskManager:
         """
         Check if a new trade would overlap with correlated open positions.
 
-        Track (d): now magic-filtered via ``self._our_positions()`` AND
-        treats same-group opposite-direction trades as correlated (they
-        net the view out).
+        Fix #4: Only SAME-direction correlated pairs are rejected.
+        Opposite-direction pairs in the same group (e.g., buy EURUSD + sell GBPUSD)
+        are ALLOWED because they hedge each other, reducing net exposure.
 
         Returns:
             Symbol of the correlated open position, or None if safe
@@ -590,12 +636,20 @@ class RiskManager:
         if signal_group is None:
             return None  # Symbol not in any group — no correlation check needed
 
+        signal_dir = signal.direction.value  # "buy" or "sell"
+
         for pos in our_positions:
-            # Track (d): symbol in the group but not the signal's symbol —
-            # the candidate pair. Direction is irrelevant (both same- and
-            # opposite-direction are rejected; opposite nets the view).
+            # Skip if not in the same correlation group, or if it's the same symbol
             if pos.symbol not in signal_group or pos.symbol == signal.symbol:
                 continue
+
+            # Fix #4: Only reject SAME-DIRECTION correlated pairs.
+            # Opposite-direction positions in the same group are a hedge
+            # (reduced net exposure), not a risk multiplier.
+            pos_dir = "buy" if pos.type == mt5.ORDER_TYPE_BUY else "sell"
+            if pos_dir != signal_dir:
+                continue  # Opposite direction → hedge → allowed
+
             return pos.symbol
 
         return None
@@ -616,98 +670,47 @@ class RiskManager:
 
     # ── Currency Exposure Check ─────────────────────────────────────
     # Prevent over-exposure to any single currency (base or quote).
+    # Fix #2: Refactored — removed dead code, inline Counter, and duplicate
+    # settings imports. Now uses a single clear pass with collections.Counter
+    # at module level.
 
     def _check_currency_exposure(self, signal: TradeSignal) -> Optional[str]:
         """
         Check if adding a new position would exceed the currency exposure cap.
 
-        Day Trader profile limits simultaneous positions to max 2 containing
-        the same base OR quote currency. This prevents correlated risk
-        multiplication (e.g., EURUSD, EURGBP, EURJPY = 3 EUR positions).
+        Limits simultaneous positions containing the same base OR quote currency.
+        E.g., with cap=2: EURUSD + EURGBP = 2 EUR positions (allowed),
+        EURUSD + EURGBP + EURJPY = 3 EUR positions (blocked).
 
-        Track (d): Implemented as a simple count check against open positions
-        filtered by magic number.
+        Fix #2: Clean implementation — single pass, no dead code, no inline imports.
 
         Returns:
-            Symbol name of the conflicting position if exposure would be exceeded,
-            None if safe to proceed.
+            Description of the exceeded cap, or None if safe to proceed.
         """
         our_positions = self._our_positions()
         if not our_positions:
             return None
 
-        # Parse target symbol
         target_symbol = signal.symbol
         if len(target_symbol) < 6:
             return None
 
-        # Extract base and quote currency
         target_base = target_symbol[:3]
         target_quote = target_symbol[-3:]
 
-        # Count current exposure to base and quote currencies
-        base_count = 0
-        quote_count = 0
-
+        # Count currency occurrences across all open positions
+        currency_counts: Counter[str] = Counter()
         for pos in our_positions:
-            pos_symbol = pos.symbol if hasattr(pos, 'symbol') else pos.get('symbol', '')
-            if len(pos_symbol) < 6:
-                continue
+            sym = getattr(pos, 'symbol', '')
+            if len(sym) >= 6:
+                currency_counts[sym[:3]] += 1
+                currency_counts[sym[-3:]] += 1
 
-            pos_base = pos_symbol[:3]
-            pos_quote = pos_symbol[-3:]
-
-            if pos_base == target_base:
-                base_count += 1
-            if pos_quote == target_quote:
-                quote_count += 1
-
-        # Check if adding this position would exceed the cap of 2
-        # (Day Trader profile sets MAX_OPEN_POSITIONS=3 but this is different)
-        # We need an additional setting for currency exposure cap
-        from bot.config.settings import settings
-        currency_cap = getattr(settings, 'currency_exposure_cap', 2)
-
-        # If adding this trade, base currency would be at cap+1?
-        if target_base in [our_positions[i].symbol[:3] for i in range(len(our_positions)) if hasattr(our_positions[i], 'symbol')]:
-            # Signal's base currency is already represented
-            pass
-
-        # Check both directions
-        if base_count >= currency_cap and target_base not in [p.symbol[:3] for p in our_positions if hasattr(p, 'symbol') and p.symbol != target_symbol]:
-            # We're adding a NEW position with this base currency
-            pass
-
-        # Simplified check: count positions sharing base or quote with the signal
-        shared_currency_count = 0
-        for pos in our_positions:
-            pos_symbol = pos.symbol if hasattr(pos, 'symbol') else pos.get('symbol', '')
-            if len(pos_symbol) >= 6:
-                pos_base = pos_symbol[:3]
-                pos_quote = pos_symbol[-3:]
-                if target_base in (pos_base, pos_quote) or target_quote in (pos_base, pos_quote):
-                    shared_currency_count += 1
-
-        # If this signal adds yet another position sharing currency, check cap
-        # But we need to be smarter - only count positions that would share currency
-        # after adding this one
-
-        # For now, a simpler approach: check if we have >= cap positions sharing any currency
-        # with the proposed signal
-        from collections import Counter
-        currency_counts = Counter()
-
-        for pos in our_positions:
-            pos_symbol = pos.symbol if hasattr(pos, 'symbol') else pos.get('symbol', '')
-            if len(pos_symbol) >= 6:
-                currency_counts[pos_symbol[:3]] += 1
-                currency_counts[pos_symbol[-3:]] += 1
-
-        # Now check what this signal would bring
+        # Project what the signal would add
         currency_counts[target_base] += 1
         currency_counts[target_quote] += 1
 
-        # Check if any currency exceeds the cap
+        currency_cap = settings.currency_exposure_cap
         for currency, count in currency_counts.items():
             if count > currency_cap:
                 return f"Currency {currency} would exceed cap ({count}/{currency_cap})"

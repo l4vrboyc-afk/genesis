@@ -1,0 +1,78 @@
+# ── Genesis Trading Bot — pre-commit hooks ──────────────────────────
+# Install with:
+#     pip install pre-commit
+#     pre-commit install
+#
+# Run against all files:
+#     pre-commit run --all-files
+#
+# See https://pre-commit.com for more information.
+
+repos:
+  # ── General-purpose hooks ──────────────────────────────────────────
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+        args: [--markdown-linebreak-ext=md]
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-added-large-files
+        args: [--maxkb=500]
+      - id: check-merge-conflict
+      - id: detect-private-key
+
+  # ── Python linting (ruff) ──────────────────────────────────────────
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.11.0
+    hooks:
+      # Run the linter with auto-fix
+      - id: ruff
+        args: [--fix, --exit-non-zero-on-fix]
+        types_or: [python, pyi]
+      # Run the formatter
+      - id: ruff-format
+        types_or: [python, pyi]
+
+  # ── Python type checking (mypy) ───────────────────────────────────
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.15.0
+    hooks:
+      - id: mypy
+        additional_dependencies:
+          - pydantic>=2.5.0
+          - types-python-dateutil
+          - types-requests
+        args: [--ignore-missing-imports, --warn-unused-ignores]
+        # Only check modified files by default; run `mypy .` for full scan.
+        pass_filenames: true
+        # Exclude the generated build output and legacy directories.
+        exclude: |
+          (?x)(
+            ^build/|
+            ^_internal/|
+            ^_legacy_launchers/|
+            ^_legacy_tauri/|
+            ^Genesis/|
+            ^scratch/
+          )
+
+  # ── Frontend JS tests (profile + ticker) ─────────────────────────
+  # Runs the full JS test suite via npm test. This is a local hook so
+  # it only triggers when files under dashboard/frontend/ change.
+  - repo: local
+    hooks:
+      - id: frontend-js-tests
+        name: Frontend JS tests (profile + ticker)
+        description: Run the dashboard frontend JS test suite via npm test
+        entry: >-
+          bash -c 'cd dashboard/frontend && npm test 2>&1'
+        language: system
+        types_or: [javascript, html, json]
+        files: ^dashboard/frontend/
+        pass_filenames: false
+        # Note: On Windows, this hook requires Git Bash (bash.exe) in PATH.
+        # Install via https://git-scm.com if not available.
+        # To skip: SKIP=frontend-js-tests git commit -m "msg"
+        require_serial: true
+        stages: [pre-commit, pre-merge-commit]
